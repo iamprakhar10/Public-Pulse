@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-from database.models import User
-from schemas.user import UserCreate
+from app.database.models import User
+from app.schemas.user import UserCreate
 
 from sqlalchemy import select
 

@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session
 
 from app.database.models import User
-from app.schemas.user import UserCreate
+from app.schemas.auth import UserRegister
+from app.utils.security import hash_password
+
 
 from sqlalchemy import select
 
@@ -9,11 +11,12 @@ from sqlalchemy import select
 #Create a user using this database Session 
 # and this validated UserCreate object. 
 # Return a User ORM object.
-def create_user(db:Session, user:UserCreate) -> User:
+def create_user(db:Session, user:UserRegister) -> User:
     db_user = User(
         name=user.name,
         email=user.email,
-        phone=user.phone
+        phone=user.phone,
+        hashed_password=hash_password(user.password)
     )
     db.add(db_user)
     db.commit()

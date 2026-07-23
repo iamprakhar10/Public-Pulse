@@ -8,8 +8,9 @@ from app.database.crud import (
 )
 
 from app.database.dependencies import get_db
-from app.schemas.auth import UserRegister
+from app.schemas.auth import UserRegister, Token, UserLogin
 from app.schemas.user import UserResponse
+from app.utils.security import create_access_token, verify_password
 
 router = APIRouter(
     prefix="/auth",
@@ -67,6 +68,38 @@ JSON request → UserRegister → user_data"""
 # update rows
 # delete rows
 # commit transactions
+
+@router.post('/login',
+             response_model=Token,)
+def login_user(
+    login_data:UserLogin,
+    db:Session = Depends(get_db)
+) -> Token:
+    user = get_user_by_email(db, login_data.email)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+    if not verify_password(
+        login_data.password,
+        user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+    access_token = create_access_token(
+        data={'sub':str(user.id)},
+    )
+
+    return Token(
+        access_token=access_token,
+        token_type='bearer',
+        )
+
+
 
 """
 app/routers/auth.py defines authentication-related API endpoints.

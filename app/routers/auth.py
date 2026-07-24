@@ -12,6 +12,7 @@ from app.schemas.auth import UserRegister, Token, UserLogin
 from app.schemas.user import UserResponse
 from app.utils.security import create_access_token, verify_password
 
+
 router = APIRouter(
     prefix="/auth",
     tags=['Authentication'],
@@ -24,6 +25,20 @@ router = APIRouter(
 # routers/dashboard.py    → dashboard endpoints
 # 
 #  into separate files.
+
+
+# Below, response_model=UserResponse,
+# This tells FastAPI what format the outgoing response
+#  should take. When your function finishes, FastAPI will
+#  filter and format the output using the 
+# UserResponse Pydantic model (ensuring things like
+#  raw passwords aren't accidentally sent back).
+
+# status_code=status.HTTP_201_CREATED
+# If the function completes successfully without errors,
+#  it will send back a 201 Created HTTP status code,
+#  which is the standard internet protocol for
+# "I successfully created a new resource."
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -114,4 +129,41 @@ schema validates it
 CRUD talks to database
         ↓
 router returns response
+"""
+
+
+"""
+INCOMING (Request)
+HTTP Transports:  JSON String  --> '{"email": "a@b.com", "age": 25}'
+                       │
+             [ Pydantic Validates ]  <-- Checks types, format, rules
+                       │
+Your Python Code: Python Object --> user_data.email, user_data.age
+
+
+OUTGOING (Response)
+Your Python Code: Python Object --> user_obj = User(...)
+                       │
+             [ Pydantic Serializes ] <-- Strips hidden fields, formats output
+                       │
+HTTP Transports:  JSON String  --> '{"id": 1, "email": "a@b.com"}'"""
+
+
+"""
+2. List of Models (response_model=list[UserResponse])
+When returning a list, the root of the HTTP response is a JSON Array containing multiple JSON objects:
+
+JSON
+[
+  {
+    "id": 1,
+    "name": "Alice",
+    "email": "alice@example.com"
+  },
+  {
+    "id": 2,
+    "name": "Bob",
+    "email": "bob@example.com"
+  }
+]
 """

@@ -1,3 +1,5 @@
+# CREATE READ UPDATE DELETE
+
 from sqlalchemy.orm import Session
 
 from app.database.models import User

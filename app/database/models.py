@@ -100,7 +100,7 @@ class Complaint(Base):
             name='complaint_category',
             native_enum = False,
             create_constraint=True,
-            validate_strings=True
+            validate_strings=True,
             values_callable=lambda enum_class: [
                 item.value for item in enum_class
             ],
@@ -217,7 +217,7 @@ class ComplaintMessage(Base):
         ForeignKey(
             'complaints.id',
             ondelete='CASCADE',
-        )
+        ),
         nullable=False,
         index=True,
     )

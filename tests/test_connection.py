@@ -1,5 +1,5 @@
-from database.db import engine
-print(engine)
+from app.database.db import engine
+print(engine,1390)
 
 from sqlalchemy import text
 

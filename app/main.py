@@ -2,6 +2,8 @@ from fastapi import FastAPI
 
 from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router
+from app.routers.complaints import router as complaints_router
+
 app = FastAPI(
     title="Public Pulse API",
     version="0.1.0",
@@ -16,3 +18,4 @@ def health_check() -> dict[str,str]:
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(complaints_router)

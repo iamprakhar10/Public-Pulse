@@ -143,7 +143,7 @@ def get_user_complaints(
         .order_by(Complaint.created_at.desc())
     )
 
-    return list(db.scalar(statement).all())
+    return list(db.scalars(statement).all())
 
 def update_complaint_structured_data(
         db:Session,

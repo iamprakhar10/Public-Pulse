@@ -11,7 +11,8 @@ from app.database.dependencies import get_db
 from app.schemas.auth import UserRegister, Token, UserLogin
 from app.schemas.user import UserResponse
 from app.utils.security import create_access_token, verify_password
-
+from fastapi.security import OAuth2PasswordRequestForm
+from typing import Annotated
 
 router = APIRouter(
     prefix="/auth",
@@ -132,6 +133,9 @@ router returns response
 """
 
 
+
+
+
 """
 INCOMING (Request)
 HTTP Transports:  JSON String  --> '{"email": "a@b.com", "age": 25}'
@@ -146,7 +150,8 @@ Your Python Code: Python Object --> user_obj = User(...)
                        │
              [ Pydantic Serializes ] <-- Strips hidden fields, formats output
                        │
-HTTP Transports:  JSON String  --> '{"id": 1, "email": "a@b.com"}'"""
+HTTP Transports:  JSON String  --> '{"id": 1, "email": "a@b.com"}'
+"""
 
 
 """
@@ -167,3 +172,90 @@ JSON
   }
 ]
 """
+
+
+@router.post(
+    '/token',
+    response_model=Token,
+)
+def login_for_access_token(
+    form_data:Annotated[
+        OAuth2PasswordRequestForm,
+        Depends(),
+        ],
+        db:Session=Depends(get_db),
+) ->Token:
+    """
+    Authenticate a user through standard OAuth2 form format
+
+    Even though OAuth2 calls the field 'username', Our application expects
+    the user to enter their email address in that field
+
+    We will do this by code
+    """
+    # Here we will treat OAuth2's username value as the email id
+    user = get_user_by_email(
+        db=db,
+        user_email=form_data.username,      
+    )
+
+    if user is None or not verify_password(
+        form_data.password,
+        user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Invalaid email OR password lol',
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = create_access_token(
+        data={'sub': str(user.id)},
+    )
+
+    return Token(
+        access_token=access_token,
+        token_type='bearer',
+    )
+
+
+
+
+
+"""
+                         Public Pulse login system
+                                   │
+                  ┌────────────────┴────────────────┐
+                  │                                 │
+        Normal application login             Swagger Authorize
+                  │                                 │
+                  ▼                                 ▼
+        POST /auth/login                   POST /auth/token
+                  │                                 │
+        Accepts JSON data                   Accepts form data
+                  │                                 │
+     email + password                    username + password
+                  │                       username contains email
+                  └────────────────┬────────────────┘
+                                   │
+                                   ▼
+                      get_user_by_email(...)
+                                   │
+                                   ▼
+                      verify_password(...)
+                                   │
+                                   ▼
+                      create_access_token(...)
+                                   │
+                                   ▼
+                    Same JWT access token returned
+                                   │
+                                   ▼
+               Authorization: Bearer <access_token>
+                                   │
+                                   ▼
+             /users/me, /complaints, protected routes
+
+"""
+
+

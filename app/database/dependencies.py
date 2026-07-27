@@ -49,7 +49,7 @@ def get_db():
     return db
 """
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/auth/login')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/auth/token')
 # OAuth2PasswordBearer only extracts the bearer token 
 # from the request
 

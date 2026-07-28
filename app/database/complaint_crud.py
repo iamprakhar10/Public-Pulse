@@ -156,6 +156,7 @@ def update_complaint_structured_data(
     Later, the LLM will produce ComplaintStructuredUpdate data.
 
     Currently we can test it manually
+    Changed ComplaintStructuredUpdate to ComplaintAnalysis
     """
 
     # model_dump(exclude_unset=True) returns only the fields
@@ -173,3 +174,41 @@ def update_complaint_structured_data(
     db.refresh(complaint)
     
     return complaint
+
+def update_complaint_fields(
+        db:Session,
+        complaint: Complaint,
+        changes: dict,
+) -> Complaint:
+    """
+    CNU
+    Update selected structured fields on a complaint.
+
+    Only keys supplied in changes are modified
+    """
+
+    allowed_fields = {
+        "summary",
+        "category",
+        "city",
+        "area",
+        "pincode",
+        "status",
+        "email_subject",
+        "email_body",
+    }
+
+    for field_name, field_value in changes.items():
+        if field_name not in allowed_fields:
+            raise ValueError(
+                f'Unsupported complaint field: {field_name}'
+            )
+        setattr(
+            complaint,
+            field_name,
+            field_value,
+        )
+    db.commit()
+    db.refresh(complaint)
+
+    return complaint 

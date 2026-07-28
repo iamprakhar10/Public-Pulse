@@ -85,7 +85,7 @@ class Complaint(Base):
 
     # Short structured summary produced from the conversation
     summary: Mapped[str | None] = mapped_column(
-        String(255),
+        Text,
         nullable=True,
     )
 

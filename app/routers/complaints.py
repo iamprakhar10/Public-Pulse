@@ -19,6 +19,10 @@ from app.schemas.complaint import (
     ComplaintMessageResponse,
 )
 
+from app.services.complaint_workflow import (
+    process_user_complaint_message,
+)
+
 # Grouping all complaint-related endpoints under /complaints
 router = APIRouter(
     prefix='/complaints',
@@ -121,7 +125,7 @@ def get_my_complaint(
 
 @router.post(
     '/{complaint_id}/messages',
-    response_model=ComplaintMessageResponse,
+    response_model=ComplaintConversationResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def add_user_message(
@@ -129,7 +133,7 @@ def add_user_message(
     message_data: ComplaintMessageCreate,
     db:Session=Depends(get_db),
     current_user:User = Depends(get_current_user),
-) -> ComplaintMessageResponse:
+) -> ComplaintConversationResponse:
     """
     Adding another user message to an existing complaint
     conversation
@@ -139,22 +143,47 @@ def add_user_message(
     "accidentally" become AI assistant
     """
 
-    complaint = get_user_complaint(
-        db=db,
-        complaint_id=complaint_id,
-        user_id=current_user.id,
-    )
+    """
+    Add a user message and run the full AI complaint workflow.
 
-    if complaint is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Complaint not found'
+    The workflow:
+    1. Stores the user's message.
+    2. Analyses the complete conversation.
+    3. Updates structured complaint fields.
+    4. Stores the assistant's next question.
+    5. Returns the updated complaint conversation.
+    """
+
+    try:
+        return process_user_complaint_message(
+            db=db,
+            complaint_id=complaint_id,
+            user_id=current_user.id,
+            content=message_data.content,
         )
 
-    return add_complaint_message(
-        db=db,
-        complaint_id=complaint_id,
-        content=message_data.content,
-        role=MessageRole.USER,
-    )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    # complaint = get_user_complaint(
+    #     db=db,
+    #     complaint_id=complaint_id,
+    #     user_id=current_user.id,
+    # )
+
+    # if complaint is None:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_404_NOT_FOUND,
+    #         detail='Complaint not found'
+    #     )
+
+    # return add_complaint_message(
+    #     db=db,
+    #     complaint_id=complaint_id,
+    #     content=message_data.content,
+    #     role=MessageRole.USER,
+    # )
 

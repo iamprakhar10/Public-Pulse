@@ -6,6 +6,8 @@ from app.database.crud import get_user_by_email
 from app.database.session import SessionLocal
 from app.main import app
 
+from app.constants.complaint import ComplaintCategory
+from app.schemas.complaint import ComplaintAnalysis
 
 # TestClient acts like a frontend making HTTP requests to FastAPI.
 client = TestClient(app)
@@ -96,25 +98,78 @@ def delete_test_user(email: str) -> None:
             db.commit()
 
 
-def test_complete_complaint_route_flow() -> None:
+
+def test_complete_complaint_route_flow(
+    monkeypatch,
+) -> None:
     """
-    Test the complete basic complaint API workflow.
+    Test the complete complaint API workflow with mocked AI output.
 
     This verifies that an authenticated user can:
 
     1. Start a complaint.
-    2. Receive the first stored message.
-    3. Add another message.
-    4. List their complaints.
-    5. Retrieve one complaint with its full conversation.
+    2. Store the first user message.
+    3. Add another user message.
+    4. Run the AI complaint workflow.
+    5. Update structured complaint fields.
+    6. Store an assistant follow-up question.
+    7. List their complaints.
+    8. Retrieve the complete conversation.
     """
+
+    def fake_analyse_complaint_conversation(
+        messages: list[dict[str, str]],
+    ) -> ComplaintAnalysis:
+        """
+        Return predictable AI output without calling Groq.
+
+        The workflow should send both user messages to this function.
+        """
+
+        assert len(messages) == 2
+
+        assert messages[0]["role"] == "user"
+        assert (
+            messages[0]["content"]
+            == "The road near my house has been broken for months."
+        )
+
+        assert messages[1]["role"] == "user"
+        assert (
+            messages[1]["content"]
+            == "The location is Vijay Nagar, pincode 482002."
+        )
+
+        return ComplaintAnalysis(
+            summary=(
+                "The road near the user's house in Vijay Nagar "
+                "has been broken for several months."
+            ),
+            category=ComplaintCategory.ROAD,
+            city=None,
+            area="Vijay Nagar",
+            pincode="482002",
+            missing_fields=["city"],
+            next_question="Which city is Vijay Nagar located in?",
+            is_complete=False,
+        )
+
+    # Replace the real Groq function only during this test.
+    #
+    # We patch the name inside complaint_workflow because that is
+    # where analyse_complaint_conversation() is used.
+    monkeypatch.setattr(
+        "app.services.complaint_workflow."
+        "analyse_complaint_conversation",
+        fake_analyse_complaint_conversation,
+    )
 
     registration_data, auth_headers = create_test_user_and_token(
         name_prefix="ComplaintRoute",
     )
 
     try:
-        # Start a complaint conversation.
+        # Start a new complaint conversation.
         create_response = client.post(
             "/complaints",
             json={
@@ -128,14 +183,16 @@ def test_complete_complaint_route_flow() -> None:
         assert create_response.status_code == 201
 
         created_complaint = create_response.json()
-
-        # Store the generated complaint ID for later requests.
         complaint_id = created_complaint["id"]
 
         assert created_complaint["status"] == "draft"
         assert created_complaint["category"] is None
+        assert created_complaint["summary"] is None
+        assert created_complaint["city"] is None
+        assert created_complaint["area"] is None
+        assert created_complaint["pincode"] is None
 
-        # Starting a complaint should also store the first user message.
+        # Starting a complaint should store the first user message.
         assert len(created_complaint["messages"]) == 1
 
         first_message = created_complaint["messages"][0]
@@ -146,7 +203,11 @@ def test_complete_complaint_route_flow() -> None:
             == "The road near my house has been broken for months."
         )
 
-        # Add another user message to the same complaint conversation.
+        # Add the second user message.
+        #
+        # The updated route should now run the complete workflow:
+        # user message -> AI analysis -> structured update ->
+        # assistant follow-up question.
         message_response = client.post(
             f"/complaints/{complaint_id}/messages",
             json={
@@ -159,16 +220,49 @@ def test_complete_complaint_route_flow() -> None:
 
         assert message_response.status_code == 201
 
-        added_message = message_response.json()
+        updated_complaint = message_response.json()
 
-        assert added_message["complaint_id"] == complaint_id
-        assert added_message["role"] == "user"
+        assert updated_complaint["id"] == complaint_id
+
+        # Confirm that the AI-generated structured information was
+        # stored in the complaint row.
         assert (
-            added_message["content"]
+            updated_complaint["summary"]
+            == (
+                "The road near the user's house in Vijay Nagar "
+                "has been broken for several months."
+            )
+        )
+        assert updated_complaint["category"] == "road"
+        assert updated_complaint["city"] is None
+        assert updated_complaint["area"] == "Vijay Nagar"
+        assert updated_complaint["pincode"] == "482002"
+
+        # The conversation should now contain:
+        # 1. Original user message.
+        # 2. Second user message.
+        # 3. Assistant follow-up question.
+        assert len(updated_complaint["messages"]) == 3
+
+        assert updated_complaint["messages"][0]["role"] == "user"
+        assert (
+            updated_complaint["messages"][0]["content"]
+            == "The road near my house has been broken for months."
+        )
+
+        assert updated_complaint["messages"][1]["role"] == "user"
+        assert (
+            updated_complaint["messages"][1]["content"]
             == "The location is Vijay Nagar, pincode 482002."
         )
 
-        # Retrieve all complaints belonging to this user.
+        assert updated_complaint["messages"][2]["role"] == "assistant"
+        assert (
+            updated_complaint["messages"][2]["content"]
+            == "Which city is Vijay Nagar located in?"
+        )
+
+        # Retrieve all complaints belonging to the authenticated user.
         list_response = client.get(
             "/complaints",
             headers=auth_headers,
@@ -183,7 +277,17 @@ def test_complete_complaint_route_flow() -> None:
             for complaint in complaints
         )
 
-        # Retrieve one complaint with its complete conversation.
+        listed_complaint = next(
+            complaint
+            for complaint in complaints
+            if complaint["id"] == complaint_id
+        )
+
+        assert listed_complaint["category"] == "road"
+        assert listed_complaint["area"] == "Vijay Nagar"
+        assert listed_complaint["pincode"] == "482002"
+
+        # Retrieve the complaint with its complete conversation.
         detail_response = client.get(
             f"/complaints/{complaint_id}",
             headers=auth_headers,
@@ -194,14 +298,24 @@ def test_complete_complaint_route_flow() -> None:
         complaint_detail = detail_response.json()
 
         assert complaint_detail["id"] == complaint_id
-        assert len(complaint_detail["messages"]) == 2
+        assert complaint_detail["category"] == "road"
+        assert complaint_detail["area"] == "Vijay Nagar"
+        assert complaint_detail["pincode"] == "482002"
+
+        assert len(complaint_detail["messages"]) == 3
 
         assert complaint_detail["messages"][0]["role"] == "user"
         assert complaint_detail["messages"][1]["role"] == "user"
+        assert complaint_detail["messages"][2]["role"] == "assistant"
+
+        assert (
+            complaint_detail["messages"][2]["content"]
+            == "Which city is Vijay Nagar located in?"
+        )
 
     finally:
-        # Remove the temporary user and their complaint data,
-        # even if an assertion fails.
+        # Remove the temporary user and all related complaint data,
+        # even when an assertion fails.
         delete_test_user(registration_data["email"])
 
 
@@ -230,7 +344,7 @@ def test_user_cannot_access_another_users_complaint() -> None:
     )
 
     try:
-        # The first user creates the complaint.
+        # The first user creates a complaint.
         create_response = client.post(
             "/complaints",
             json={
@@ -243,16 +357,14 @@ def test_user_cannot_access_another_users_complaint() -> None:
 
         complaint_id = create_response.json()["id"]
 
-        # The second user tries to retrieve the first user's complaint.
+        # The second user attempts to retrieve the first user's complaint.
         forbidden_response = client.get(
             f"/complaints/{complaint_id}",
             headers=second_user_headers,
         )
 
-        # Your route intentionally returns 404 instead of 403.
-        #
-        # This avoids revealing whether another user's complaint
-        # with that ID actually exists.
+        # Returning 404 avoids revealing whether another user's
+        # complaint with that ID exists.
         assert forbidden_response.status_code == 404
         assert forbidden_response.json() == {
             "detail": "Complaint not found",

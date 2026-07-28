@@ -107,7 +107,7 @@ class ComplaintStructuredUpdate(BaseModel):
 
     summary: str | None = Field(
         default=None,
-        max_length=255,
+        max_length=1255,
     )
 
     category: ComplaintCategory|None = None
@@ -132,3 +132,44 @@ class ComplaintStatusUpdate(BaseModel):
     Are they even allowed
     """
     status: ComplaintStatus
+
+
+class ComplaintAnalysis(BaseModel):
+    """
+    This is the structured result produced by the LLM
+    after analysing the complaete ccomplaint conversation.
+
+    The result tells the backend:
+    - Which complaint details are already known
+    - Which important details are still missing
+    - What question should be asked next
+    """
+
+    summary: str | None = Field(
+        default=None,
+        max_length=1255,
+    )
+
+    category: ComplaintCategory | None = None
+
+    city: str | None = Field(
+        default=None,
+        max_length=150,
+    )
+
+    area: str|None = Field(
+        default=None,
+        max_length=250,
+    )
+
+    pincode: Pincode|None=None
+
+    #Imp details still need to be collected.
+    missing_fields: list[str] = Field(default_factory=list)
+
+    #Asstant's next question, will become none when all
+    # required information has been collected 
+    next_question:str|None = None
+
+    #Are all info nedded is collected
+    is_complete:bool=False

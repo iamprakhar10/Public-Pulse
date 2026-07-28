@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.constants.complaint import MessageRole
+from app.constants.complaint import MessageRole, ComplaintStatus
 from app.database.models import Complaint, ComplaintMessage
 from app.schemas.complaint import ComplaintStructuredUpdate
 
@@ -227,6 +227,52 @@ def save_complaint_email_draft(
     """
     complaint.email_subject = subject
     complaint.email_body = body
+
+    db.commit()
+    db.refresh(complaint)
+
+    return complaint
+
+def update_complaint_email_draft(
+        db: Session,
+        complaint: Complaint,
+        subject: str,
+        body:str,
+) -> Complaint:
+    """
+    Save changes made by user to the draft email
+
+    Editing the draft won't approve it. The status will still
+    be awaiting approval
+    """
+    complaint.email_subject = subject
+    complaint.email_body = body
+
+    db.commit()
+    db.refresh(complaint)
+
+    return complaint
+
+def approve_complaint_email_draft(
+        db:Session,
+        complaint: Complaint,
+) -> Complaint:
+    """
+    We will mark current email draft as approved by the user
+
+    Will check if the body and subject are present or not
+    """
+
+    if not complaint.email_subject:
+        raise ValueError(
+            "The complaint doesn't have a email subject."
+        )
+    if not complaint.email_body:
+            raise ValueError(
+                "The complaint doesn't have a email body."
+            )
+        
+    complaint.status = ComplaintStatus.APPROVED
 
     db.commit()
     db.refresh(complaint)

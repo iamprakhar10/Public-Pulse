@@ -188,3 +188,40 @@ class ComplaintEmailDraft(BaseModel):
         min_length=50,
         max_length=5000,
     )
+
+
+class ComplaintEmailDraftUpdate(BaseModel):
+    """
+    Data, the user can change while reviewing the generated
+    email draft
+
+    both subject and body are required as the fronend will
+    submit the complete edited version of the draft.
+    """
+
+    subject: str = Field(
+        min_length=5,
+        max_length=255,
+    )
+
+    body:str = Field(
+        min_length=50,
+        max_length=5000,
+    )
+    #represents ai output
+
+class ComplaintApprovalResponse(BaseModel):
+    """
+    Response returned after the user explicitly approves the 
+    draft
+    """
+
+    id: int
+    status: ComplaintStatus
+    email_subject: str
+    email_body: str
+
+    model_config = ConfigDict(from_attributes=True)
+    #represents edited user output
+    # It's the response data, therefore
+    #  model_config = ConfigDict(from_attributes=True)

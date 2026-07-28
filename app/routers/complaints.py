@@ -17,6 +17,8 @@ from app.schemas.complaint import (
     ComplaintResponse,
     ComplaintStart,
     ComplaintMessageResponse,
+    ComplaintApprovalResponse,
+    ComplaintEmailDraftUpdate,
 )
 
 from app.services.complaint_workflow import (
@@ -25,13 +27,29 @@ from app.services.complaint_workflow import (
 from app.services.complaint_email_workflow import (
     create_complaint_email_draft,
 )
-
+from app.services.complaint_approval_workflow import (
+    approve_complaint_draft,
+    edit_complaint_email_draft
+)
 
 # Grouping all complaint-related endpoints under /complaints
 router = APIRouter(
     prefix='/complaints',
     tags=['Complaints'],
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @router.post(
     "",
@@ -75,6 +93,19 @@ def start_complaint(
 
     return created_complaint
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 @router.get(
     '',
     response_model=list[ComplaintResponse],
@@ -95,6 +126,14 @@ def list_my_complaints(
         db=db,
         user_id=current_user.id,
     )
+
+
+
+
+
+
+
+
 
 
 
@@ -126,6 +165,16 @@ def get_my_complaint(
             detail="Complaint not found"
         )
     return complaint
+
+
+
+
+
+
+
+
+
+
 
 @router.post(
     '/{complaint_id}/messages',
@@ -201,6 +250,17 @@ def add_user_message(
     #     role=MessageRole.USER,
     # )
 
+
+
+
+
+
+
+
+
+
+
+
 @router.post(
     '/{complaint_id}/email-draft',
     response_model=ComplaintConversationResponse,
@@ -235,5 +295,96 @@ def generate_email_draft(
 
         raise HTTPException(
             status_code= status.HTTP_409_CONFLICT,
+            detail=error_message,
+        ) from exc
+
+
+
+
+
+
+
+
+
+
+
+@router.patch(
+    "/{complaint_id}/email-draft",
+    response_model=ComplaintConversationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def edit_email_draft(
+    complaint_id: int,
+    draft_data: ComplaintEmailDraftUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ComplaintConversationResponse:
+    """
+    Allowing the authenticated user to edit the ai generated
+    email draft
+
+    It won't approve or send the email
+    """
+    try:
+        return edit_complaint_email_draft(
+            db=db,
+            complaint_id=complaint_id,
+            user=current_user,
+            draft_data=draft_data,
+        )
+    except ValueError as exc : 
+        error_message = str(exc)
+
+        if error_message == "Complaint not found.":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_message,
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_message,
+        ) from exc
+
+
+
+
+
+
+
+
+
+
+@router.post(
+    "/{complaint_id}/approve",
+    response_model=ComplaintApprovalResponse,
+)
+def approve_email_draft(
+    complaint_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ComplaintApprovalResponse:
+    """
+    Explicitly approve the saved email draft
+
+    This won't send the email, only changes the complaint status
+    """
+    try:
+        return approve_complaint_draft(
+            db=db,
+            complaint_id=complaint_id,
+            user=current_user,
+        )
+
+    except ValueError as exc:
+        error_message = str(exc)
+
+        if error_message == "Complaint not found.":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_message,
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=error_message,
         ) from exc

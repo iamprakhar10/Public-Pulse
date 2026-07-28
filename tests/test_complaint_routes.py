@@ -680,3 +680,184 @@ def test_generate_complaint_email_draft(
 
     finally:
         delete_test_user(registration_data["email"])
+
+
+
+
+
+
+
+
+
+
+
+def test_edit_and_approve_complaint_email_draft(
+    monkeypatch,
+) -> None:
+    """
+    Verify that a user can:
+
+    1. Complete a complaint.
+    2. Generate an email draft.
+    3. Edit the saved draft.
+    4. Explicitly approve the edited draft.
+    """
+
+    def fake_complete_analysis(
+        messages: list[dict[str, str]],
+    ) -> ComplaintAnalysis:
+        """
+        Simulate the AI deciding that the complaint has enough details.
+        """
+
+        return ComplaintAnalysis(
+            summary=(
+                "The main road in Vijay Nagar, Jabalpur, "
+                "has been badly damaged for three months."
+            ),
+            category=ComplaintCategory.ROAD,
+            city="Jabalpur",
+            area="Vijay Nagar",
+            pincode="482002",
+            missing_fields=[],
+            next_question=None,
+            is_complete=True,
+        )
+
+    def fake_generate_complaint_email_draft(
+        complaint: Complaint,
+        user: User,
+    ) -> ComplaintEmailDraft:
+        """
+        Return a predictable email draft without calling Groq.
+        """
+
+        return ComplaintEmailDraft(
+            subject="Request for repair of damaged road",
+            body=(
+                "Dear Sir/Madam,\n\n"
+                f"I, {user.name}, wish to report a damaged road "
+                "in Vijay Nagar, Jabalpur, pincode 482002.\n\n"
+                "Please inspect the location and take appropriate action.\n\n"
+                f"Sincerely,\n{user.name}"
+            ),
+        )
+
+    monkeypatch.setattr(
+        "app.services.complaint_workflow."
+        "analyse_complaint_conversation",
+        fake_complete_analysis,
+    )
+
+    monkeypatch.setattr(
+        "app.services.complaint_email_workflow."
+        "generate_complaint_email_draft",
+        fake_generate_complaint_email_draft,
+    )
+
+    registration_data, auth_headers = create_test_user_and_token(
+        name_prefix="ApprovalFlow",
+    )
+
+    try:
+        # Start a new complaint.
+        create_response = client.post(
+            "/complaints",
+            json={
+                "message": (
+                    "The main road in Vijay Nagar is badly damaged."
+                ),
+            },
+            headers=auth_headers,
+        )
+
+        assert create_response.status_code == 201
+
+        complaint_id = create_response.json()["id"]
+
+        # Submit enough information to complete the complaint.
+        complete_response = client.post(
+            f"/complaints/{complaint_id}/messages",
+            json={
+                "content": (
+                    "It is in Jabalpur, pincode 482002, "
+                    "and has been damaged for three months."
+                ),
+            },
+            headers=auth_headers,
+        )
+
+        assert complete_response.status_code == 201
+        assert (
+            complete_response.json()["status"]
+            == "awaiting_approval"
+        )
+
+        # Generate and save the initial AI draft.
+        generate_response = client.post(
+            f"/complaints/{complaint_id}/email-draft",
+            headers=auth_headers,
+        )
+
+        assert generate_response.status_code == 201
+        assert generate_response.json()["email_subject"] is not None
+        assert generate_response.json()["email_body"] is not None
+
+        edited_subject = (
+            "Urgent request for repair of damaged road in Vijay Nagar"
+        )
+
+        edited_body = (
+            "Dear Sir/Madam,\n\n"
+            "I wish to report that the main road in Vijay Nagar, "
+            "Jabalpur, pincode 482002, has remained badly damaged "
+            "for the past three months. The damaged road is creating "
+            "difficulty and safety risks for commuters.\n\n"
+            "Please arrange an inspection and complete the necessary "
+            "repairs at the earliest.\n\n"
+            f"Sincerely,\n{registration_data['name']}"
+        )
+
+        # Edit the generated draft.
+        edit_response = client.patch(
+            f"/complaints/{complaint_id}/email-draft",
+            json={
+                "subject": edited_subject,
+                "body": edited_body,
+            },
+            headers=auth_headers,
+        )
+
+        assert edit_response.status_code == 200
+
+        edited_complaint = edit_response.json()
+
+        assert edited_complaint["email_subject"] == edited_subject
+        assert edited_complaint["email_body"] == edited_body
+
+        # Editing must not approve the complaint.
+        assert (
+            edited_complaint["status"]
+            == "awaiting_approval"
+        )
+
+        # Explicitly approve the edited draft.
+        approve_response = client.post(
+            f"/complaints/{complaint_id}/approve",
+            headers=auth_headers,
+        )
+
+        assert approve_response.status_code == 200
+
+        approved_complaint = approve_response.json()
+
+        assert approved_complaint["id"] == complaint_id
+        assert approved_complaint["status"] == "approved"
+        assert (
+            approved_complaint["email_subject"]
+            == edited_subject
+        )
+        assert approved_complaint["email_body"] == edited_body
+
+    finally:
+        delete_test_user(registration_data["email"])

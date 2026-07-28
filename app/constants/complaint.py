@@ -31,6 +31,7 @@ class ComplaintStatus(str, Enum):
 
     DRAFT = 'draft'
     AWAITING_APPROVAL = "awaiting_approval"
+    APPROVED = "approved"
     SENT = 'sent'
     UNRESOLVED = "unresolved"
     PARTIALLY_RESOLVED = "partially_resolved"

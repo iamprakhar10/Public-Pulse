@@ -173,3 +173,18 @@ class ComplaintAnalysis(BaseModel):
 
     #Are all info nedded is collected
     is_complete:bool=False
+
+
+class ComplaintEmailDraft(BaseModel):
+    """
+    Structured formal email generated from a fully completed complaint
+    """
+    subject: str = Field(
+        min_length=5,
+        max_length=5000,
+    )
+
+    body: str = Field(
+        min_length=50,
+        max_length=5000,
+    )

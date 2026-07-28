@@ -22,6 +22,10 @@ from app.schemas.complaint import (
 from app.services.complaint_workflow import (
     process_user_complaint_message,
 )
+from app.services.complaint_email_workflow import (
+    create_complaint_email_draft,
+)
+
 
 # Grouping all complaint-related endpoints under /complaints
 router = APIRouter(
@@ -163,6 +167,16 @@ def add_user_message(
         )
 
     except ValueError as exc:
+        error_message = str(exc)
+
+        if error_message == (
+            "This complaint is no longer accepting conversation messages."
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=error_message,
+            ) from exc
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
@@ -187,3 +201,39 @@ def add_user_message(
     #     role=MessageRole.USER,
     # )
 
+@router.post(
+    '/{complaint_id}/email-draft',
+    response_model=ComplaintConversationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def generate_email_draft(
+    complaint_id:int,
+    db:Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ComplaintConversationResponse:
+    """
+    Generates and saves a formal email DRAFT for a completed complaint
+
+    The draft email will be stored in the database
+    """
+
+    try:
+        return create_complaint_email_draft(
+            db=db,
+            complaint_id=complaint_id,
+            user=current_user,
+        )
+
+    except ValueError as exc:
+        error_message = str(exc)
+
+        if error_message == "Complaint not found.":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_message,
+            ) from exc
+
+        raise HTTPException(
+            status_code= status.HTTP_409_CONFLICT,
+            detail=error_message,
+        ) from exc

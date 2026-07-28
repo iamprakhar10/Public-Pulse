@@ -18,7 +18,10 @@ Return the updated complaint conversation
 
 from sqlalchemy.orm import Session
 
-from app.constants.complaint import MessageRole
+from app.constants.complaint import (
+    MessageRole, 
+    ComplaintStatus,
+)
 from app.database.complaint_crud import (
     add_complaint_message,
     get_user_complaint,
@@ -75,6 +78,11 @@ def process_user_complaint_message(
     if complaint is None:
         raise ValueError('Complaint not found.')
 
+    if complaint.status != ComplaintStatus.DRAFT:
+        raise ValueError(
+        "This complaint is no longer accepting conversation messages."
+    )
+
     add_complaint_message(
         db=db,
         complaint_id=complaint_id,
@@ -115,7 +123,21 @@ def process_user_complaint_message(
         update_data=structured_update,
     )
 
-    if analysis.next_question is not None:
+    # When all required details have been collected we will move
+    # the complaint to the next stage
+    if analysis.is_complete:
+        complaint.status = ComplaintStatus.AWAITING_APPROVAL
+    else:
+        complaint.status  = ComplaintStatus.DRAFT    
+
+    db.commit()
+    db.refresh(complaint)
+
+    #Storing a followup question only when complaint is finished/complete
+    if  (
+        not analysis.is_complete
+        and analysis.next_question is not None
+    ):
         add_complaint_message(
             db=db,
             complaint_id=complaint_id,

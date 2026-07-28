@@ -212,3 +212,23 @@ def update_complaint_fields(
     db.refresh(complaint)
 
     return complaint 
+
+def save_complaint_email_draft(
+        db:Session,
+        complaint: Complaint,
+        subject: str,
+        body: str,
+) -> Complaint:
+    """
+    Saving a generated email subject + body
+
+    The complaint remains awaitign approval until user
+    give it's ok
+    """
+    complaint.email_subject = subject
+    complaint.email_body = body
+
+    db.commit()
+    db.refresh(complaint)
+
+    return complaint

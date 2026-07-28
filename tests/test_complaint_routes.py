@@ -1,13 +1,15 @@
 import random
 
 from fastapi.testclient import TestClient
-
+from app.database.models import Complaint, User
 from app.database.crud import get_user_by_email
 from app.database.session import SessionLocal
 from app.main import app
 
 from app.constants.complaint import ComplaintCategory
-from app.schemas.complaint import ComplaintAnalysis
+from app.schemas.complaint import (ComplaintAnalysis, 
+                                   ComplaintEmailDraft,
+                                   )
 
 # TestClient acts like a frontend making HTTP requests to FastAPI.
 client = TestClient(app)
@@ -373,3 +375,308 @@ def test_user_cannot_access_another_users_complaint() -> None:
     finally:
         delete_test_user(first_user_data["email"])
         delete_test_user(second_user_data["email"])
+
+
+def test_complaint_becomes_awaiting_approval_when_complete(
+    monkeypatch,
+) -> None:
+    """
+    Confirm that a completed complaint moves from draft
+    to awaiting_approval and no further AI question is stored.
+    """
+
+    def fake_complete_analysis(
+        messages: list[dict[str, str]],
+    ) -> ComplaintAnalysis:
+        """
+        Simulate the AI deciding that all required details
+        are available.
+        """
+
+        assert len(messages) == 2
+
+        return ComplaintAnalysis(
+            summary=(
+                "The main road in Vijay Nagar, Jabalpur, "
+                "has been badly damaged for three months."
+            ),
+            category=ComplaintCategory.ROAD,
+            city="Jabalpur",
+            area="Vijay Nagar",
+            pincode="482002",
+            missing_fields=[],
+            next_question=None,
+            is_complete=True,
+        )
+
+    monkeypatch.setattr(
+        "app.services.complaint_workflow."
+        "analyse_complaint_conversation",
+        fake_complete_analysis,
+    )
+
+    registration_data, auth_headers = create_test_user_and_token(
+        name_prefix="CompleteComplaint",
+    )
+
+    try:
+        create_response = client.post(
+            "/complaints",
+            json={
+                "message": (
+                    "The main road in Vijay Nagar is badly damaged."
+                ),
+            },
+            headers=auth_headers,
+        )
+
+        assert create_response.status_code == 201
+
+        complaint_id = create_response.json()["id"]
+
+        message_response = client.post(
+            f"/complaints/{complaint_id}/messages",
+            json={
+                "content": (
+                    "It is in Jabalpur, pincode 482002, "
+                    "and has been damaged for three months."
+                ),
+            },
+            headers=auth_headers,
+        )
+
+        assert message_response.status_code == 201
+
+        complaint = message_response.json()
+
+        assert complaint["status"] == "awaiting_approval"
+        assert complaint["category"] == "road"
+        assert complaint["city"] == "Jabalpur"
+        assert complaint["area"] == "Vijay Nagar"
+        assert complaint["pincode"] == "482002"
+
+        # Only the two user messages should exist.
+        # No assistant follow-up question should be added.
+        assert len(complaint["messages"]) == 2
+
+        assert complaint["messages"][0]["role"] == "user"
+        assert complaint["messages"][1]["role"] == "user"
+
+    finally:
+        delete_test_user(registration_data["email"])
+
+
+def test_completed_complaint_rejects_new_messages(
+    monkeypatch,
+) -> None:
+    """
+    Confirm that a complaint stops accepting ordinary chat messages
+    after it reaches awaiting_approval.
+    """
+
+    def fake_complete_analysis(
+        messages: list[dict[str, str]],
+    ) -> ComplaintAnalysis:
+        return ComplaintAnalysis(
+            summary=(
+                "The road in Vijay Nagar, Jabalpur, "
+                "has been damaged for three months."
+            ),
+            category=ComplaintCategory.ROAD,
+            city="Jabalpur",
+            area="Vijay Nagar",
+            pincode="482002",
+            missing_fields=[],
+            next_question=None,
+            is_complete=True,
+        )
+
+    monkeypatch.setattr(
+        "app.services.complaint_workflow."
+        "analyse_complaint_conversation",
+        fake_complete_analysis,
+    )
+
+    registration_data, auth_headers = create_test_user_and_token(
+        name_prefix="ClosedComplaint",
+    )
+
+    try:
+        create_response = client.post(
+            "/complaints",
+            json={
+                "message": "The road in Vijay Nagar is damaged.",
+            },
+            headers=auth_headers,
+        )
+
+        assert create_response.status_code == 201
+
+        complaint_id = create_response.json()["id"]
+
+        complete_response = client.post(
+            f"/complaints/{complaint_id}/messages",
+            json={
+                "content": (
+                    "It is in Jabalpur, pincode 482002, "
+                    "and has been damaged for three months."
+                ),
+            },
+            headers=auth_headers,
+        )
+
+        assert complete_response.status_code == 201
+        assert (
+            complete_response.json()["status"]
+            == "awaiting_approval"
+        )
+
+        # Try to add another message after completion.
+        rejected_response = client.post(
+            f"/complaints/{complaint_id}/messages",
+            json={
+                "content": "I want to add one more detail.",
+            },
+            headers=auth_headers,
+        )
+
+        assert rejected_response.status_code == 409
+        assert rejected_response.json() == {
+            "detail": (
+                "This complaint is no longer accepting "
+                "conversation messages."
+            )
+        }
+
+    finally:
+        delete_test_user(registration_data["email"])
+
+
+def test_generate_complaint_email_draft(
+    monkeypatch,
+) -> None:
+    """
+    Confirm that a completed complaint can generate and save
+    an email draft without calling the real Groq API.
+    """
+
+    def fake_complete_analysis(
+        messages: list[dict[str, str]],
+    ) -> ComplaintAnalysis:
+        """
+        Simulate the complaint-analysis model deciding that
+        the complaint is complete.
+        """
+
+        return ComplaintAnalysis(
+            summary=(
+                "The main road in Vijay Nagar, Jabalpur, "
+                "has been badly damaged for three months."
+            ),
+            category=ComplaintCategory.ROAD,
+            city="Jabalpur",
+            area="Vijay Nagar",
+            pincode="482002",
+            missing_fields=[],
+            next_question=None,
+            is_complete=True,
+        )
+
+    def fake_generate_complaint_email_draft(
+        complaint: Complaint,
+        user: User,
+    ) -> ComplaintEmailDraft:
+        """
+        Return a predictable email draft without calling Groq.
+        """
+
+        assert user.name
+        assert complaint.city == "Jabalpur"
+        assert complaint.area == "Vijay Nagar"
+        assert complaint.pincode == "482002"
+
+        return ComplaintEmailDraft(
+            subject="Request for repair of damaged road in Vijay Nagar",
+            body=(
+                "Dear Sir/Madam,\n\n"
+                f"I, {user.name}, wish to report that the main road "
+                "in Vijay Nagar, Jabalpur, pincode 482002, has been "
+                "badly damaged for three months.\n\n"
+                "I request timely inspection and appropriate action.\n\n"
+                f"Sincerely,\n{user.name}"
+            ),
+        )
+
+    monkeypatch.setattr(
+        "app.services.complaint_workflow."
+        "analyse_complaint_conversation",
+        fake_complete_analysis,
+    )
+
+    monkeypatch.setattr(
+        "app.services.complaint_email_workflow."
+        "generate_complaint_email_draft",
+        fake_generate_complaint_email_draft,
+    )
+
+    registration_data, auth_headers = create_test_user_and_token(
+        name_prefix="EmailDraft",
+    )
+
+    try:
+        create_response = client.post(
+            "/complaints",
+            json={
+                "message": (
+                    "The main road in Vijay Nagar is badly damaged."
+                ),
+            },
+            headers=auth_headers,
+        )
+
+        assert create_response.status_code == 201
+
+        complaint_id = create_response.json()["id"]
+
+        # Complete the complaint so its status becomes
+        # awaiting_approval.
+        complete_response = client.post(
+            f"/complaints/{complaint_id}/messages",
+            json={
+                "content": (
+                    "It is in Jabalpur, pincode 482002, "
+                    "and has been damaged for three months."
+                ),
+            },
+            headers=auth_headers,
+        )
+
+        assert complete_response.status_code == 201
+        assert (
+            complete_response.json()["status"]
+            == "awaiting_approval"
+        )
+
+        # Generate and save the email draft.
+        draft_response = client.post(
+            f"/complaints/{complaint_id}/email-draft",
+            headers=auth_headers,
+        )
+
+        assert draft_response.status_code == 201
+
+        complaint = draft_response.json()
+
+        assert complaint["id"] == complaint_id
+
+        assert (
+            complaint["email_subject"]
+            == "Request for repair of damaged road in Vijay Nagar"
+        )
+
+        assert complaint["email_body"] is not None
+        assert registration_data["name"] in complaint["email_body"]
+        assert "Vijay Nagar" in complaint["email_body"]
+
+    finally:
+        delete_test_user(registration_data["email"])

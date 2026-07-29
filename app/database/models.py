@@ -129,6 +129,16 @@ class Complaint(Base):
         index= True,
     )
 
+    #new canonical city reference
+    city_id: Mapped[int | None] = mapped_column(
+        ForeignKey('cities.id'),
+        nullable=True,
+    )
+
+    # Gives access to the related City ORM object:
+    # complaint.city_record.name
+    city_record: Mapped['City | None'] = relationship()
+
     # Locality or Neighbourhood where the problem exists.
     area: Mapped[str | None] = mapped_column(
         String(150),
@@ -202,6 +212,8 @@ class Complaint(Base):
         cascade='all, delete-orphan',
         order_by='ComplaintMessage.created_at'
     )
+
+
 
 
 
@@ -310,7 +322,8 @@ class State(Base):
 
 
 
-
+# State.cities = relationship(back_populates="state")
+# City.state = relationship(back_populates="cities")
 
 
 class City(Base):
@@ -365,6 +378,8 @@ class City(Base):
         back_populates="city",
         cascade="all, delete-orphan",
     )
+
+    
 
     __table_args__ = (
         # Two cities in the same state cannot have the same

@@ -381,16 +381,20 @@ def test_complaint_becomes_awaiting_approval_when_complete(
     monkeypatch,
 ) -> None:
     """
-    Confirm that a completed complaint moves from draft
-    to awaiting_approval and no further AI question is stored.
+    Confirm that a completed complaint:
+
+    1. Moves from draft to awaiting_approval.
+    2. Stores the canonical city name.
+    3. Stores the matching city_id foreign key.
+    4. Does not store another assistant question.
     """
 
     def fake_complete_analysis(
         messages: list[dict[str, str]],
     ) -> ComplaintAnalysis:
         """
-        Simulate the AI deciding that all required details
-        are available.
+        Simulate the AI deciding that all required complaint
+        details are available.
         """
 
         assert len(messages) == 2
@@ -409,6 +413,7 @@ def test_complaint_becomes_awaiting_approval_when_complete(
             is_complete=True,
         )
 
+    # Replace the real LLM call with a predictable fake result.
     monkeypatch.setattr(
         "app.services.complaint_workflow."
         "analyse_complaint_conversation",
@@ -420,6 +425,7 @@ def test_complaint_becomes_awaiting_approval_when_complete(
     )
 
     try:
+        # Start a new complaint with the first user message.
         create_response = client.post(
             "/complaints",
             json={
@@ -434,6 +440,8 @@ def test_complaint_becomes_awaiting_approval_when_complete(
 
         complaint_id = create_response.json()["id"]
 
+        # Add the second message. The mocked AI now marks the
+        # complaint as complete.
         message_response = client.post(
             f"/complaints/{complaint_id}/messages",
             json={
@@ -449,14 +457,40 @@ def test_complaint_becomes_awaiting_approval_when_complete(
 
         complaint = message_response.json()
 
+        # Verify the API response.
         assert complaint["status"] == "awaiting_approval"
         assert complaint["category"] == "road"
         assert complaint["city"] == "Jabalpur"
         assert complaint["area"] == "Vijay Nagar"
         assert complaint["pincode"] == "482002"
 
+        # Verify that the canonical City row was connected to
+        # the complaint in PostgreSQL.
+        db = SessionLocal()
+
+        try:
+            saved_complaint = db.get(
+                Complaint,
+                complaint_id,
+            )
+
+            assert saved_complaint is not None
+
+            # The temporary string field stores the canonical name.
+            assert saved_complaint.city == "Jabalpur"
+
+            # The foreign key must point to the Jabalpur City row.
+            assert saved_complaint.city_id is not None
+
+            assert saved_complaint.city_record is not None
+            assert saved_complaint.city_record.name == "Jabalpur"
+
+        finally:
+            db.close()
+
         # Only the two user messages should exist.
-        # No assistant follow-up question should be added.
+        # No assistant follow-up question should be added after
+        # the complaint becomes complete.
         assert len(complaint["messages"]) == 2
 
         assert complaint["messages"][0]["role"] == "user"
@@ -466,6 +500,8 @@ def test_complaint_becomes_awaiting_approval_when_complete(
         delete_test_user(registration_data["email"])
 
 
+
+        
 def test_completed_complaint_rejects_new_messages(
     monkeypatch,
 ) -> None:

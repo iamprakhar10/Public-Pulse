@@ -28,11 +28,11 @@ from app.database.complaint_crud import (
     update_complaint_structured_data,
 )
 
-from app.database.models import Complaint
+from app.database.models import Complaint, City
 from app.schemas.complaint import ComplaintStructuredUpdate
 from app.services.complaint_ai import analyse_complaint_conversation
 
-
+from app.services.location_resolver import resolve_city
 
 def convert_messages_for_llm(
         complaint: Complaint,
@@ -49,6 +49,39 @@ def convert_messages_for_llm(
         }
         for message in complaint.messages
     ]
+
+
+
+
+def resolve_analysis_city(
+        db:Session,
+        city_name: str|None,
+) -> City|None:
+    """
+    Resolve the city text returned by the LLM to a canonical City row.
+
+    Returns:
+        City:
+            When the extracted city matches a supported canonical city
+            name or one of its registered aliases.
+
+        None:
+            When the LLM has not extracted a city yet.
+
+    Raises:
+        ValueError:
+            When the LLM returned a city, but it is unsupported,
+            ambiguous, or cannot be resolved.
+    """
+
+    if city_name is None or not city_name.strip():
+        return None
+
+    return resolve_city(
+        db=db,
+        city_name=city_name,
+    )
+
 
 
 
@@ -107,12 +140,46 @@ def process_user_complaint_message(
         messages=messages,
     )
 
+
+    # The LLM returns city as text, such as:
+    # "Jabalpur", "JBP", or "Jabalpur City".
+    #
+    # Our resolver converts that text into a trusted City database row.
+    resolved_city : City | None=None
+    city_resolution_failed = False
+
+    try:
+        resolved_city = resolve_analysis_city(
+            db=db,
+            city_name=analysis.city,
+        )
+
+    except ValueError:
+        # A city was extracted, but it could not be matched to one of
+        # the supported cities.
+        #
+        # We do not trust the raw LLM output and we do not allow the
+        # complaint to become complete.
+        city_resolution_failed = True
+
+
+    # Store only the canonical city name.
+    #
+    # Example:
+    # LLM output: "JBP"
+    # Stored value: "Jabalpur"
+    canonical_city_name = (
+        resolved_city.name
+        if resolved_city is not None
+        else None
+    )
+
     # We will add only those fields which are present in Complaint-
     # model/table 
     structured_update = ComplaintStructuredUpdate(
         summary=analysis.summary,
         category=analysis.category,
-        city=analysis.city,
+        city=canonical_city_name,
         area=analysis.area,
         pincode=analysis.pincode,
     )
@@ -123,40 +190,62 @@ def process_user_complaint_message(
         update_data=structured_update,
     )
 
-    # When all required details have been collected we will move
-    # the complaint to the next stage
-    if analysis.is_complete:
+    # Store the canonical foreign key when resolution succeeds.
+    if resolved_city is not None:
+        complaint.city_id = resolved_city.id
+    else:
+        complaint.city_id = None
+
+
+
+    # The complaint is truly complete only when:
+    # 1. The LLM says all required details are available.
+    # 2. The city has been resolved to a supported City row.
+    is_truly_complete = (
+        analysis.is_complete
+        and resolved_city is not None
+    )
+    if is_truly_complete:
         complaint.status = ComplaintStatus.AWAITING_APPROVAL
     else:
-        complaint.status  = ComplaintStatus.DRAFT    
-
+        complaint.status = ComplaintStatus.DRAFT
     db.commit()
     db.refresh(complaint)
 
-    #Storing a followup question only when complaint is finished/complete
-    if  (
-        not analysis.is_complete
-        and analysis.next_question is not None
-    ):
+
+    # Decide which clarification question should be stored.
+    next_question = analysis.next_question
+    if city_resolution_failed:
+        next_question = (
+            "I could not identify the city reliably. "
+            "Which city is this issue located in?"
+        )
+
+    elif resolved_city is None and not next_question:
+        next_question = (
+            "Which city is this issue located in?"
+        )
+    # Store a follow-up question only when the complaint is incomplete.
+    if not is_truly_complete and next_question is not None:
         add_complaint_message(
             db=db,
             complaint_id=complaint_id,
-            content=analysis.next_question,
+            content=next_question,
             role=MessageRole.ASSISTANT,
         )
+
+    # Reload once more so the returned complaint includes the latest
+    # assistant message and all updated fields.
     updated_complaint = get_user_complaint(
         db=db,
         complaint_id=complaint_id,
         user_id=user_id,
-    )    
+    )
 
     if updated_complaint is None:
         raise ValueError(
-            "Updated complaint couldn't be reloaded"
+            "Updated complaint could not be reloaded."
         )
 
     return updated_complaint
-
-
-
 

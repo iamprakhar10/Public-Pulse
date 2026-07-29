@@ -6,6 +6,7 @@ from sqlalchemy import (Boolean,
                         ForeignKey, 
                         Text,
                         Enum as SQLAlchemyEnum,
+                        UniqueConstraint,
                         )
 
 from app.constants.complaint import (
@@ -50,6 +51,12 @@ class User(Base):
 # One User → Many Complaints
 # Deleting a user will also delete their 
 # complaint records through the ORM relationship
+
+
+
+
+
+
 
 
 
@@ -196,6 +203,15 @@ class Complaint(Base):
         order_by='ComplaintMessage.created_at'
     )
 
+
+
+
+
+
+
+
+
+
 class ComplaintMessage(Base):
     """
     Stores on individual message in a complaint conversation.
@@ -254,4 +270,201 @@ class ComplaintMessage(Base):
     )
       
 
-      
+
+
+
+
+
+
+
+
+
+class State(Base):
+    """
+    Indian states supported by publicpulse
+
+    Other tables should refer to a state through it's numeric Id
+    """
+    __tablename__= 'states'
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        unique=True,
+    )
+
+    code: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        unique=True,
+    )
+
+    # One state can contain multiple cities
+    cities: Mapped[list['City']] = relationship(
+        back_populates='state',
+    )
+
+
+
+
+
+
+class City(Base):
+    """
+    Canonical city record.
+
+    Example:
+        id = 1
+        name = "Jabalpur"
+        normalized_name = "jabalpur"
+        state_id = 1
+
+    Complaints and authorities will eventually reference city.id.
+    """
+    __tablename__= 'cities'
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+    )
+
+    #Display name of cities for users
+    name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    # Cleaned version used for lookup.
+    #
+    # Example:
+    # "Jabalpur" -> "jabalpur"
+    normalized_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    state_id: Mapped[int] = mapped_column(
+        ForeignKey('states.id'),
+        nullable=False,
+    )
+    # Lets us disable a city without deleting its records.
+    is_supported: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    state: Mapped["State"] = relationship(
+        back_populates="cities",
+    )
+
+    aliases: Mapped[list["CityAlias"]] = relationship(
+        back_populates="city",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        # Two cities in the same state cannot have the same
+        # normalized canonical name.
+        UniqueConstraint(
+            "normalized_name",
+            "state_id",
+            name="uq_city_normalized_name_state",
+        ),
+    )
+
+
+
+
+
+
+
+
+
+class CityAlias(Base):
+    """
+    Another/similar name that resolves to a canonical city
+
+    Examples:
+        "jbp" -> Jabalpur
+        "jubbulpore" -> Jabalpur
+        "lko" -> Lucknow
+    """
+
+    __tablename__= 'city_aliases'
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+    )
+
+    #Human-radable alias
+    alias: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    # Normalized alias used during matching.
+    normalized_alias: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    city_id: Mapped[int] = mapped_column(
+        ForeignKey("cities.id"),
+        nullable=False,
+    )
+
+    city: Mapped["City"] = relationship(
+        back_populates="aliases",
+    )
+
+    __table_args__ = (
+        # For the first version, an alias must point to only one city.
+        # This prevents "jbp" from accidentally pointing to multiple cities.
+        UniqueConstraint(
+            "normalized_alias",
+            name="uq_city_alias_normalized",
+        ),
+    )
+
+
+
+
+
+# class Authority(Base):
+#     """
+#     Government authorities to whom we will send the email/complaint
+#     """
+
+#     __tablename__= "authorities"
+
+#     id: Mapped[int] = mapped_column(primary_key=True)
+
+#     name: Mapped[str] = mapped_column(
+#         String(255),
+#         nullable=False,
+#     )
+
+#     department: Mapped[str] =  mapped_column(
+#         String(255),
+#         nullable=False,
+#     )
+
+#     category: Mapped[ComplaintCategory] = mapped_column(
+#         SQLAlchemyEnum(
+#             ComplaintCategory,
+#             name='authority_complaint_category',
+#             native_enum=False,
+#             create_constraint=True,
+#         ),
+#         nullable=False,
+#     )
+
+#     city : Mapped[str] = mapped_column(
+#         String(255),
+#         nullable=False,
+#     )
+    

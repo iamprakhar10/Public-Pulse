@@ -153,6 +153,16 @@ class Complaint(Base):
         index=True
     )
 
+    authority_id: Mapped[int | None] = mapped_column(
+        ForeignKey("authorities.id", ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+
+    authority: Mapped["Authority | None"] = relationship(
+        back_populates="complaints",
+    )
+
     # Current stage of complaint
     status: Mapped[ComplaintStatus] = mapped_column(
         SQLAlchemyEnum(
@@ -529,6 +539,10 @@ class Authority(Base):
 
     city: Mapped['City'] = relationship(
         back_populates='authorities',
+    )
+
+    complaints : Mapped[list["Complaint"]] = relationship(
+        back_populates='authority',
     )
 
     __table_args__ = (

@@ -228,6 +228,12 @@ def process_user_complaint_message(
         complaint.status = ComplaintStatus.AWAITING_APPROVAL
     else:
         complaint.status = ComplaintStatus.DRAFT
+
+    if resolved_authority is not None:
+        complaint.authority_id = resolved_authority.id
+    else:
+        complaint.authority_id=None
+
     db.commit()
     db.refresh(complaint)
 

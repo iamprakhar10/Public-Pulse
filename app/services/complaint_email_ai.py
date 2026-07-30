@@ -54,7 +54,12 @@ def build_email_complaint_context(
 
     Only stored complaint facts are included in this
     """
-
+    if complaint.authority is None:
+        raise ValueError(
+            "The complaint must have an assigned authority "
+            "before generating an email draft."
+        )
+    
     return f"""
 Complainant name:
 {user.name}
@@ -73,6 +78,15 @@ Area:
 
 Pincode:
 {complaint.pincode or "Not available"}
+
+Responsible authority:
+{complaint.authority.name}
+
+Department:
+{complaint.authority.department}
+
+Recipient email:
+{complaint.authority.email}
 """.strip()
 
 def generate_complaint_email_draft(
@@ -116,6 +130,11 @@ def generate_complaint_email_draft(
             "A complaint pincode is required before generating an email."
         )
 
+    if complaint.authority is None:
+        raise ValueError(
+            "An authority must be assigned before generating an email draft."
+        )
+
     complaint_context = build_email_complaint_context(
         complaint=complaint,
         user=user,
@@ -141,7 +160,7 @@ def generate_complaint_email_draft(
         response_format={
             'type':'json_schema',
             'json_schema':{
-                'name':'complaint_amail_draft',
+                'name':'complaint_email_draft',
                 'strict':False,
                 'schema': ComplaintEmailDraft.model_json_schema(),
             },

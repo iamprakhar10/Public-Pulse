@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, EmailStr
 
 from app.constants.complaint import (
     ComplaintCategory,
@@ -58,6 +58,20 @@ class ComplaintMessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ComplaintAuthorityResponse(BaseModel):
+    """
+    Safe API representation of the authority assigned to a complaint.
+    """
+
+    id: int
+    name: str
+    department: str
+    email: EmailStr
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
 class ComplaintResponse(BaseModel):
     """
     Safe api representation of one complaint case
@@ -75,10 +89,14 @@ class ComplaintResponse(BaseModel):
     area: str | None
     pincode: str | None
     status: ComplaintStatus
+
+    authority: ComplaintAuthorityResponse | None = None
+
     email_subject: str | None
     email_body: str | None
     created_at: datetime
     updated_at: datetime
+    
 
     model_config = ConfigDict(from_attributes=True)
 

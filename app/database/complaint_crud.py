@@ -119,7 +119,10 @@ def get_user_complaint(
     """
     statement = (
         select(Complaint)
-        .options(selectinload(Complaint.messages))
+        .options(
+            selectinload(Complaint.messages),
+            selectinload(Complaint.authority),
+            )
         .where(
             Complaint.id==complaint_id,
             Complaint.user_id == user_id,
@@ -139,6 +142,9 @@ def get_user_complaints(
     """
     statement = (
         select(Complaint)
+        .options(
+            selectinload(Complaint.authority),
+        )
         .where(Complaint.user_id==user_id)
         .order_by(Complaint.created_at.desc())
     )

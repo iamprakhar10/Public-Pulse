@@ -28,11 +28,13 @@ from app.database.complaint_crud import (
     update_complaint_structured_data,
 )
 
-from app.database.models import Complaint, City
+from app.database.models import Complaint, City, Authority
 from app.schemas.complaint import ComplaintStructuredUpdate
 from app.services.complaint_ai import analyse_complaint_conversation
 
 from app.services.location_resolver import resolve_city
+
+from app.database.authority_crud import get_authority_for_complaint
 
 def convert_messages_for_llm(
         complaint: Complaint,
@@ -163,6 +165,21 @@ def process_user_complaint_message(
         city_resolution_failed = True
 
 
+    resolved_authority : Authority | None = None
+
+    if (
+        resolved_city is not None
+        and analysis.pincode is not None
+        and analysis.category is not None
+    ):
+        resolved_authority = get_authority_for_complaint(
+            db=db,
+            city_id=resolved_city.id,
+            pincode=analysis.pincode,
+            category=analysis.category,
+        )
+
+
     # Store only the canonical city name.
     #
     # Example:
@@ -204,7 +221,9 @@ def process_user_complaint_message(
     is_truly_complete = (
         analysis.is_complete
         and resolved_city is not None
+        and resolved_authority is not None
     )
+
     if is_truly_complete:
         complaint.status = ComplaintStatus.AWAITING_APPROVAL
     else:
@@ -221,10 +240,22 @@ def process_user_complaint_message(
             "Which city is this issue located in?"
         )
 
-    elif resolved_city is None and not next_question:
+    elif (
+        resolved_city is None 
+        and not next_question
+        and resolved_authority is None
+    ):
         next_question = (
-            "Which city is this issue located in?"
+            "I could not verify that pincode for this location. "
+            "What is the correct pincode?"
         )
+
+    elif resolve_city is None and not next_question:
+        next_question = (
+        "Which city is this issue located in?"
+    )
+
+        
     # Store a follow-up question only when the complaint is incomplete.
     if not is_truly_complete and next_question is not None:
         add_complaint_message(

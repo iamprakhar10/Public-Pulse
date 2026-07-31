@@ -18,3 +18,13 @@ result = complaint_graph.invoke(
 )
 
 pprint(result)
+
+
+result = complaint_graph.invoke(
+    {
+        "complaint_id": 159,
+        "user_id": 5,
+    }
+)
+
+pprint(result)

@@ -1,6 +1,6 @@
 from typing import TypedDict
 
-from app.constants.complaint import ComplaintCategory
+from app.constants.complaint import ComplaintCategory, ComplaintStatus
 
 
 
@@ -40,6 +40,9 @@ class ComplaintGraphState(TypedDict, total=False):
 
     # Used when a node can't complete it's work 
     error : str | None
+
+    # Current lifecycle status after database persistence.
+    status: ComplaintStatus
 
 
 

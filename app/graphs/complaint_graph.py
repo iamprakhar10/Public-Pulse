@@ -404,6 +404,11 @@ def ask_clarification_node(
             role=MessageRole.ASSISTANT,
         )
 
+        return {
+            'next_question': next_question,
+            error: error,
+        }
+
     finally:
         db.close()
 

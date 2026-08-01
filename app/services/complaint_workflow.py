@@ -28,6 +28,8 @@ from app.database.complaint_crud import (
     update_complaint_structured_data,
 )
 
+from app.graphs.complaint_graph import complaint_graph
+
 from app.database.models import Complaint, City, Authority
 from app.schemas.complaint import ComplaintStructuredUpdate
 from app.services.complaint_ai import analyse_complaint_conversation

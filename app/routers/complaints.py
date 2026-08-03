@@ -10,7 +10,7 @@ from app.database.complaint_crud import(
 )
 
 from app.database.dependencies import get_current_user, get_db
-from app.database.models import User
+from app.database.models import User, Complaint
 from app.schemas.complaint import (
     ComplaintConversationResponse,
     ComplaintMessageCreate,
@@ -32,6 +32,17 @@ from app.services.complaint_approval_workflow import (
     approve_complaint_draft,
     edit_complaint_email_draft
 )
+
+from app.services.complaint_send_workflow import (
+    send_approved_complaint_email,
+)
+from app.services.email_sender import (
+    ConsoleEmailSender,
+    EmailSender,
+)
+
+
+
 
 # Grouping all complaint-related endpoints under /complaints
 router = APIRouter(
@@ -381,6 +392,83 @@ def approve_email_draft(
         error_message = str(exc)
 
         if error_message == "Complaint not found.":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=error_message,
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=error_message,
+        ) from exc
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def get_email_sender() -> EmailSender:
+    """
+    Dependency function
+    Provides the email delivery implementation used by API
+
+    Currently ConsoleEmailSender just prints the email in. terminal
+
+    Later we will replace it
+    """
+
+    return ConsoleEmailSender()
+
+@router.post(
+    "/{complaint_id}/send",
+    response_model=ComplaintConversationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def send_complaint_email(
+    complaint_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    email_sender: EmailSender = Depends(get_email_sender),
+) -> Complaint:
+    """
+    Sends an appreoved complaint email to the matched authority
+
+    Current development behaviour:
+    - ConsoleEmailSender prints the email in the terminal.
+    - After successful delivery, complaint status becomes SENT.
+
+    Later:
+    - ConsoleEmailSender will be replaced with GmailEmailSender.
+    """
+
+    try:
+        return send_approved_complaint_email(
+            db=db,
+            complaint_id=complaint_id,
+            user_id=current_user.id,
+            email_sender=email_sender,
+        )
+
+    except ValueError as exc:
+        error_message = str(exc)
+        if error_message.startswith("Complaint not found"):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=error_message,

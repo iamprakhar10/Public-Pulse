@@ -11,7 +11,7 @@ from app.schemas.complaint import (
     ComplaintAnalysis,
     ComplaintEmailDraft,
 )
-
+from app.routers.complaints import get_email_sender
 
 # TestClient behaves like a frontend calling the FastAPI application.
 client = TestClient(app)
@@ -724,3 +724,145 @@ def test_edit_and_approve_complaint_email_draft(
 
     finally:
         delete_test_user(registration_data["email"])
+
+
+
+
+
+class RecordingEmailSender:
+    """
+    Fake API email sender.
+
+    It records outgoing emails so route tests can verify delivery
+    without sending a real email.
+    """
+
+    def __init__(self) -> None:
+        self.sent_emails: list[dict[str, str]] = []
+
+    def send_email(
+        self,
+        *,
+        recipient: str,
+        subject: str,
+        body: str,
+    ) -> None:
+        self.sent_emails.append(
+            {
+                "recipient": recipient,
+                "subject": subject,
+                "body": body,
+            }
+        )
+
+
+
+
+def test_send_approved_complaint_email_route(
+    monkeypatch,
+) -> None:
+    """
+    Verify the complete HTTP flow:
+
+    complaint
+    → complete
+    → generate draft
+    → approve
+    → send
+    → status SENT
+    """
+
+    def fake_generate_complaint_email_draft(
+        complaint: Complaint,
+        user: User,
+    ) -> ComplaintEmailDraft:
+        assert complaint.authority is not None
+
+        return ComplaintEmailDraft(
+            subject="Request for repair of damaged road",
+            body=(
+                "Dear Sir/Madam,\n\n"
+                "The main road in Vijay Nagar, Jabalpur, "
+                "pincode 482002, has been badly damaged.\n\n"
+                "Please inspect the location and take appropriate "
+                "action.\n\n"
+                f"Sincerely,\n{user.name}"
+            ),
+        )
+
+    monkeypatch.setattr(
+        ANALYSIS_PATCH_TARGET,
+        two_turn_complete_analysis,
+    )
+
+    monkeypatch.setattr(
+        EMAIL_DRAFT_PATCH_TARGET,
+        fake_generate_complaint_email_draft,
+    )
+
+    sender = RecordingEmailSender()
+
+    # FastAPI will inject our fake sender instead of
+    # ConsoleEmailSender during this test.
+    app.dependency_overrides[get_email_sender] = lambda: sender
+
+    registration_data, auth_headers = create_test_user_and_token(
+        name_prefix="SendComplaint",
+    )
+
+    try:
+        complaint_id, _ = complete_road_complaint(
+            auth_headers,
+        )
+
+        draft_response = client.post(
+            f"/complaints/{complaint_id}/email-draft",
+            headers=auth_headers,
+        )
+
+        assert draft_response.status_code == 201
+
+        approve_response = client.post(
+            f"/complaints/{complaint_id}/approve",
+            headers=auth_headers,
+        )
+
+        assert approve_response.status_code == 200
+        assert approve_response.json()["status"] == "approved"
+
+        send_response = client.post(
+            f"/complaints/{complaint_id}/send",
+            headers=auth_headers,
+        )
+
+        assert send_response.status_code == 200
+
+        sent_complaint = send_response.json()
+
+        assert sent_complaint["id"] == complaint_id
+        assert sent_complaint["status"] == "sent"
+
+        assert len(sender.sent_emails) == 1
+
+        sent_email = sender.sent_emails[0]
+
+        assert sent_email["subject"] == (
+            "Request for repair of damaged road"
+        )
+        assert sent_email["body"] == sent_complaint["email_body"]
+
+        # Recipient must come from the matched authority,
+        # not from user-controlled request data.
+        assert sent_email["recipient"] == (
+            sent_complaint["authority"]["email"]
+        )
+
+    finally:
+        app.dependency_overrides.pop(
+            get_email_sender,
+            None,
+        )
+
+        delete_test_user(
+            registration_data["email"],
+        )

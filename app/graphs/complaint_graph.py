@@ -369,7 +369,7 @@ def ask_clarification_node(
 
     if state.get('city_id') is None and state.get('city'):
         next_question = (
-            "I could not identify the city reliably." \
+            "I could not identify the city reliably. " 
             "Which city is this issue located in?"
         )
 
@@ -406,7 +406,7 @@ def ask_clarification_node(
 
         return {
             'next_question': next_question,
-            error: error,
+            "error": error,
         }
 
     finally:

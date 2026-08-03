@@ -23,6 +23,7 @@ from app.schemas.complaint import (
 
 from app.services.complaint_workflow import (
     process_user_complaint_message,
+    process_started_complaint,
 )
 from app.services.complaint_email_workflow import (
     create_complaint_email_draft,
@@ -62,15 +63,11 @@ def start_complaint(
     current_user: User = Depends(get_current_user),
 ) -> ComplaintConversationResponse:
     """
-    Starts a new complaint conversation
+    Creating a complaint, storing it's first message
+    And then running Langgraph
 
-    FastAPI
-    - Validates the incoming JSON using ComplaintStart(pydantic)
-    - Identifies the logged-in user using JWT
-    - Create a Complaint row
-    - Store the first user message
-    - Returns the complaint with its conversation
     """
+
 
     complaint = create_complaint(
         db=db,
@@ -78,20 +75,25 @@ def start_complaint(
         first_message=complaint_data.message,
     )
 
-    # Retrieve it again with it's messages loaded
-    created_complaint=get_user_complaint(
+    return process_started_complaint(
         db=db,
         complaint_id=complaint.id,
         user_id=current_user.id,
     )
+    # # Retrieve it again with it's messages loaded
+    # created_complaint=get_user_complaint(
+    #     db=db,
+    #     complaint_id=complaint.id,
+    #     user_id=current_user.id,
+    # )
 
-    if created_complaint is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Complaint was created but couldnot be laoded",
-        )
+    # if created_complaint is None:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #         detail="Complaint was created but couldnot be laoded",
+    #     )
 
-    return created_complaint
+    # return created_complaint
 
 
 

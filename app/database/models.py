@@ -47,10 +47,121 @@ class User(Base):
         back_populates='user',
         cascade='all, delete-orphan',
     )
+    gmail_credential: Mapped["GmailCredential | None"] = relationship(
+        back_populates='user',
+        cascade="all, delete-orphan",
+        uselist=False, #on user can have 0 or 1 GmailCredential
+        single_parent=True,
+    )
 
 # One User → Many Complaints
 # Deleting a user will also delete their 
 # complaint records through the ORM relationship
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class GmailCredential(Base):
+    """
+    Stoes one user's GmailOAuth authorization
+
+    No password will be stored
+
+    We will store refresh token(which will be encrypted)
+    Later it can be decrypted and exchanged for a short lived Google access token
+
+    """
+
+    __tablename__ = "gmail_credentials"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True,
+    )
+
+    # One public pulse user can only have one connected gmail account
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete='CASCADE',
+        ),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    # Google's stable identifier for the connected Google account.
+    # 
+    # This is better than relying only on email address because 
+    # an email id can theoritically change 
+    google_account_id: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    # Useful for displaying:
+    # "Cnnected as example@gmail.com" 
+    google_email: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    # This contains encrypted text, we will never store plain refresh
+    # token 
+    encrypted_refresh_token: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    # Permission granted by the user
+    # like -> https://www.googleapi.com/auth/gmail.send
+    scopes: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    ) 
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    user: Mapped["User"] = relationship(
+        back_populates="gmail_credential",
+    )
+
+
+
+
 
 
 

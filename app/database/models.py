@@ -172,6 +172,82 @@ class GmailCredential(Base):
 
 
 
+
+
+
+
+
+
+class GmailOAuthState(Base):
+    """
+    This stores a temporary Google OAuth state value
+
+    A state value will link google callback to the Public pulse
+    user who started the Gmail connection
+
+    Only a SHA-256 hash of the state is stored. The original random
+    state value travels through the browser.
+    """
+
+    __tablename__ = "gmail_oauth_states"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "users.id",
+            ondelete='CASCADE',
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    # Storing the hash instead of the actual browser-facing state 
+    # value 
+    state_hash : Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    # State should remain valid only for a short period
+    expires_at : Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    # Once the callback consumes the state, it can't be reused
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 class Complaint(Base):
     """
     Represents one complete civic complaint case.

@@ -123,6 +123,7 @@ class GmailConnectionResult:
 def exchange_google_authorization_code(
         config: GoogleOAuthConfig,
         authorization_code: str,
+        code_verifier:str,
 ) -> GoogleAuthorizationResult:
     """
     Exchange Google's one time authorization code for credentials
@@ -138,6 +139,7 @@ def exchange_google_authorization_code(
 
     flow = build_google_oauth_flow(
         config=config,
+        code_verifier=code_verifier,
     )
 
     # Makes a backend->Google POST request to google's token
@@ -259,7 +261,7 @@ def complete_gmail_oauth_connection(
     5. Encrypts and store the refresh tokens
     """
 
-    user_id = consume_oauth_state(
+    user_id, code_verifier = consume_oauth_state(
         db=db,
         state=state,
     )
@@ -267,6 +269,7 @@ def complete_gmail_oauth_connection(
     google_result = exchange_google_authorization_code(
         config=config,
         authorization_code=authorization_code,
+        code_verifier=code_verifier,
     )
 
 
@@ -343,6 +346,7 @@ def complete_gmail_oauth_connection(
 
 def build_google_oauth_flow(
         config: GoogleOAuthConfig,
+        code_verifier:str,
 ) -> Flow:
     """
     Building gogle's OAuth Flow bject from public pulse 
@@ -374,6 +378,7 @@ def build_google_oauth_flow(
     flow = Flow.from_client_config(
         client_config=client_config,
         scopes=GOOGLE_OAUTH_SCOPES,
+        code_verifier=code_verifier,
     )
 
     flow.redirect_uri = config.redirect_uri
@@ -386,6 +391,7 @@ def build_google_oauth_flow(
 def build_google_authorization_url(
         config: GoogleOAuthConfig,
         state: str,
+        code_verifier: str,
 ) -> str:
     """
     Building the google's consent-page url for one OAuth attempt
@@ -399,8 +405,14 @@ def build_google_authorization_url(
             "OAuth state is required."
         )
 
+    if not code_verifier:
+        raise ValueError(
+            "PKCE code verifier is required."
+        )
+
     flow = build_google_oauth_flow(
         config=config,
+        code_verifier=code_verifier,
     )
 
     authorization_url, returned_state = (

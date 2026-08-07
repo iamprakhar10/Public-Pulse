@@ -73,7 +73,7 @@ def connect_gmail(
 
     google_config = get_google_oauth_config()
 
-    state = create_oauth_state(
+    state, code_verifier = create_oauth_state(
         db=db,
         user_id=current_user.id,
     )
@@ -81,6 +81,7 @@ def connect_gmail(
     authorization_url = build_google_authorization_url(
         config=google_config,
         state=state,
+        code_verifier=code_verifier,
     )
 
     return RedirectResponse(
@@ -176,6 +177,6 @@ def gmail_callback(
         ) from exc
 
     return GmailConnectionResponse(
-        message=" Gmail connected successfully",
+        message="Gmail connected successfully.",
         google_email=connection.google_email,
     )

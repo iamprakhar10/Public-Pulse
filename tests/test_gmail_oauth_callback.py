@@ -1,7 +1,13 @@
 """
 Tests for completing the Gmail OAuth callback.
 
-Google network calls are replaced with controlled test results.
+Google network calls are mocked. These tests verify that:
+
+- OAuth state identifies the correct Public Pulse user.
+- The same PKCE code verifier created during /gmail/connect
+  reaches the authorization-code exchange.
+- Google refresh tokens are encrypted before storage.
+- First-time connections require a refresh token.
 """
 
 import pytest
@@ -10,11 +16,15 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.config import GoogleOAuthConfig
+from app.database.db import SessionLocal
 from app.database.gmail_credential_crud import (
     get_gmail_credential_by_user_id,
 )
-from app.database.models import User
-from app.database.session import SessionLocal
+from app.database.models import (
+    GmailCredential,
+    GmailOAuthState,
+    User,
+)
 from app.services import gmail_oauth
 from app.services.gmail_oauth import (
     GoogleAuthorizationResult,
@@ -27,22 +37,30 @@ from app.utils.token_encryption import decrypt_token
 
 
 TEST_EMAIL = "gmail-callback-test@example.com"
+TEST_PHONE = "9222222222"
 
 
 @pytest.fixture
 def db_session():
     """
-    Provide a database session and remove callback test records.
+    Provide a clean database session for Gmail OAuth callback tests.
+
+    Dependent Gmail rows are removed before deleting the test user.
     """
 
     db = SessionLocal()
 
     try:
+        # Delete dependent records first.
+        db.execute(delete(GmailOAuthState))
+        db.execute(delete(GmailCredential))
+
         db.execute(
             delete(User).where(
                 User.email == TEST_EMAIL,
             )
         )
+
         db.commit()
 
         yield db
@@ -50,11 +68,15 @@ def db_session():
     finally:
         db.rollback()
 
+        db.execute(delete(GmailOAuthState))
+        db.execute(delete(GmailCredential))
+
         db.execute(
             delete(User).where(
                 User.email == TEST_EMAIL,
             )
         )
+
         db.commit()
         db.close()
 
@@ -62,7 +84,9 @@ def db_session():
 @pytest.fixture
 def google_config() -> GoogleOAuthConfig:
     """
-    Return non-secret Google settings for testing.
+    Return fake Google OAuth configuration.
+
+    No real Google credentials are used by these tests.
     """
 
     return GoogleOAuthConfig(
@@ -77,7 +101,7 @@ def google_config() -> GoogleOAuthConfig:
 @pytest.fixture
 def encryption_key() -> str:
     """
-    Generate an isolated encryption key for each test.
+    Generate an isolated Fernet key for each test.
     """
 
     return Fernet.generate_key().decode("utf-8")
@@ -87,13 +111,13 @@ def create_test_user(
         db: Session,
 ) -> User:
     """
-    Create the Public Pulse user starting Gmail OAuth.
+    Create the Public Pulse user who starts Gmail OAuth.
     """
 
     user = User(
         name="Gmail Callback Test",
         email=TEST_EMAIL,
-        phone="9222222222",
+        phone=TEST_PHONE,
         hashed_password=hash_password(
             "test-password",
         ),
@@ -113,13 +137,25 @@ def test_complete_gmail_oauth_connection(
         monkeypatch,
 ) -> None:
     """
-    A valid state and Google result should create an encrypted
-    Gmail credential.
+    A valid OAuth callback should:
+
+    - consume the correct OAuth state,
+    - pass the stored PKCE verifier into Google's token exchange,
+    - encrypt the refresh token,
+    - save the Gmail credential.
     """
 
-    user = create_test_user(db_session)
+    user = create_test_user(
+        db=db_session,
+    )
 
-    state = create_oauth_state(
+    # create_oauth_state now returns:
+    #
+    # (
+    #     state,
+    #     code_verifier,
+    # )
+    state, code_verifier = create_oauth_state(
         db=db_session,
         user_id=user.id,
     )
@@ -127,9 +163,19 @@ def test_complete_gmail_oauth_connection(
     def fake_exchange(
             config,
             authorization_code,
+            code_verifier: str,
     ) -> GoogleAuthorizationResult:
+        """
+        Replace the real Google HTTP exchange.
+
+        Most importantly, confirm that the same PKCE verifier generated
+        when OAuth started reaches this callback exchange.
+        """
+
         assert config == google_config
         assert authorization_code == "test-code"
+
+        assert code_verifier == expected_code_verifier
 
         return GoogleAuthorizationResult(
             google_account_id="google-user-123",
@@ -140,6 +186,10 @@ def test_complete_gmail_oauth_connection(
                 "https://www.googleapis.com/auth/gmail.send"
             ),
         )
+
+    # Store the original verifier under a different name so the
+    # fake function can clearly compare against it.
+    expected_code_verifier = code_verifier
 
     monkeypatch.setattr(
         gmail_oauth,
@@ -161,14 +211,37 @@ def test_complete_gmail_oauth_connection(
     )
 
     assert result.user_id == user.id
-    assert result.google_email == "connected@gmail.com"
+
+    assert (
+        result.google_account_id
+        == "google-user-123"
+    )
+
+    assert (
+        result.google_email
+        == "connected@gmail.com"
+    )
+
     assert stored_credential is not None
 
+    assert (
+        stored_credential.google_account_id
+        == "google-user-123"
+    )
+
+    assert (
+        stored_credential.google_email
+        == "connected@gmail.com"
+    )
+
+    # Plain refresh token must never be stored in PostgreSQL.
     assert (
         stored_credential.encrypted_refresh_token
         != "plain-google-refresh-token"
     )
 
+    # But decrypting it with our encryption key must recover
+    # Google's original refresh token.
     decrypted_refresh_token = decrypt_token(
         encrypted_token=(
             stored_credential.encrypted_refresh_token
@@ -189,27 +262,49 @@ def test_first_connection_requires_refresh_token(
         monkeypatch,
 ) -> None:
     """
-    A first connection cannot work without a Google refresh token.
+    A first Gmail connection cannot complete if Google returns no
+    refresh token and we do not already have one stored.
     """
 
-    user = create_test_user(db_session)
+    user = create_test_user(
+        db=db_session,
+    )
 
-    state = create_oauth_state(
+    state, expected_code_verifier = create_oauth_state(
         db=db_session,
         user_id=user.id,
     )
 
+    def fake_exchange(
+            config,
+            authorization_code,
+            code_verifier,
+    ) -> GoogleAuthorizationResult:
+        """
+        Simulate Google returning identity information but no
+        refresh token.
+        """
+
+        assert config == google_config
+        assert authorization_code == "test-code"
+
+        # Again verify PKCE survived from /connect to /callback.
+        assert code_verifier == expected_code_verifier
+
+        return GoogleAuthorizationResult(
+            google_account_id="google-user-456",
+            google_email="missing-token@gmail.com",
+            refresh_token=None,
+            scopes=(
+                "openid "
+                "https://www.googleapis.com/auth/gmail.send"
+            ),
+        )
+
     monkeypatch.setattr(
         gmail_oauth,
         "exchange_google_authorization_code",
-        lambda config, authorization_code: (
-            GoogleAuthorizationResult(
-                google_account_id="google-user-456",
-                google_email="missing-token@gmail.com",
-                refresh_token=None,
-                scopes="openid",
-            )
-        ),
+        fake_exchange,
     )
 
     with pytest.raises(
@@ -223,3 +318,12 @@ def test_first_connection_requires_refresh_token(
             config=google_config,
             encryption_key=encryption_key,
         )
+
+    # Since this was the user's first Gmail connection and Google
+    # returned no refresh token, no GmailCredential should be stored.
+    stored_credential = get_gmail_credential_by_user_id(
+        db=db_session,
+        user_id=user.id,
+    )
+
+    assert stored_credential is None

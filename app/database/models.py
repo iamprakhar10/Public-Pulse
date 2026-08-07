@@ -7,6 +7,7 @@ from sqlalchemy import (Boolean,
                         Text,
                         Enum as SQLAlchemyEnum,
                         UniqueConstraint,
+                        
                         )
 
 from app.constants.complaint import (
@@ -212,6 +213,11 @@ class GmailOAuthState(Base):
         nullable=False,
         unique=True,
         index=True,
+    )
+
+    code_verifier: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
     )
 
     # State should remain valid only for a short period

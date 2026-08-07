@@ -1,10 +1,17 @@
+"""
+Tests for Google OAuth URL creation.
+
+These tests do not contact Google.
+They verify that Public Pulse builds the authorization URL correctly,
+including the PKCE code challenge.
+"""
+
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 
 from app.config import GoogleOAuthConfig
 from app.services.gmail_oauth import (
-    GMAIL_SEND_SCOPE,
     build_google_authorization_url,
 )
 
@@ -12,13 +19,13 @@ from app.services.gmail_oauth import (
 @pytest.fixture
 def google_config() -> GoogleOAuthConfig:
     """
-    Provide non-secret Google OAuth configuration for tests.
+    Return safe fake Google OAuth configuration for tests.
+
+    These are not real credentials.
     """
 
     return GoogleOAuthConfig(
-        client_id=(
-            "test-client-id.apps.googleusercontent.com"
-        ),
+        client_id="test-client-id",
         client_secret="test-client-secret",
         redirect_uri=(
             "http://127.0.0.1:8000/gmail/callback"
@@ -30,60 +37,115 @@ def test_build_google_authorization_url(
         google_config,
 ) -> None:
     """
-    The generated URL should contain the values required by Google's
-    authorization endpoint.
+    Google authorization URL should contain the values required
+    for OAuth and PKCE.
     """
-
-    state = "secure-test-state"
 
     authorization_url = build_google_authorization_url(
         config=google_config,
-        state=state,
+        state="test-state",
+
+        # NEW:
+        # The same verifier will later be recovered during
+        # /gmail/callback and used for the token exchange.
+        code_verifier="test-code-verifier",
     )
 
     parsed_url = urlparse(authorization_url)
     query = parse_qs(parsed_url.query)
 
+    # We should be sending the browser to Google over HTTPS.
     assert parsed_url.scheme == "https"
     assert parsed_url.netloc == "accounts.google.com"
 
+    # Public Pulse's Google OAuth client.
     assert query["client_id"] == [
         google_config.client_id
     ]
 
+    # Google must redirect back to our callback endpoint.
     assert query["redirect_uri"] == [
         google_config.redirect_uri
     ]
 
+    # We want an authorization code, not tokens directly
+    # through the browser.
     assert query["response_type"] == ["code"]
-    assert query["state"] == [state]
+
+    # State protects and identifies this particular OAuth flow.
+    assert query["state"] == ["test-state"]
+
+    # Offline access allows Google to issue a refresh token.
     assert query["access_type"] == ["offline"]
+
+    # We explicitly ask Google for consent during development.
     assert query["prompt"] == ["consent"]
 
-    requested_scopes = set(
-        query["scope"][0].split()
+    # Gmail sending permission must be requested.
+    scopes = query["scope"][0].split()
+
+    assert (
+        "https://www.googleapis.com/auth/gmail.send"
+        in scopes
     )
 
-    assert GMAIL_SEND_SCOPE in requested_scopes
-    assert "openid" in requested_scopes
+    # OpenID scopes allow us to identify the Google account.
+    assert "openid" in scopes
+
     assert (
         "https://www.googleapis.com/auth/userinfo.email"
-        in requested_scopes
+        in scopes
     )
+
+    # -----------------------------
+    # PKCE checks
+    # -----------------------------
+
+    # Google should receive a code challenge derived from the
+    # code_verifier.
+    #
+    # The verifier itself must NOT be sent in this browser URL.
+    assert "code_challenge" in query
+
+    # S256 means the verifier was transformed using SHA-256.
+    assert query["code_challenge_method"] == ["S256"]
+
+    # The secret verifier stays server-side.
+    assert "code_verifier" not in query
+    assert "test-code-verifier" not in authorization_url
 
 
 def test_build_google_authorization_url_requires_state(
         google_config,
 ) -> None:
     """
-    An authorization URL must never be created without state.
+    An OAuth authorization URL must not be created without state.
     """
 
     with pytest.raises(
         ValueError,
-        match="OAuth state is required",
+        match="state",
     ):
         build_google_authorization_url(
             config=google_config,
             state="",
+            code_verifier="test-code-verifier",
+        )
+
+
+def test_build_google_authorization_url_requires_code_verifier(
+        google_config,
+) -> None:
+    """
+    PKCE requires a code verifier for the OAuth transaction.
+    """
+
+    with pytest.raises(
+        ValueError,
+        match="verifier",
+    ):
+        build_google_authorization_url(
+            config=google_config,
+            state="test-state",
+            code_verifier="",
         )

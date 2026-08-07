@@ -60,10 +60,12 @@ def create_oauth_state(
     # Generating a cryptographically secure, unpredictable
     # value 
     state = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(64)
 
     oauth_state = GmailOAuthState(
         user_id=user_id,
         state_hash=hash_oauth_state(state),
+        code_verifier=code_verifier,
         expires_at=(
             datetime.now(timezone.utc)
             + timedelta(minutes=lifetime_minutes)
@@ -73,7 +75,7 @@ def create_oauth_state(
     db.add(oauth_state)
     db.commit()
 
-    return state
+    return state, code_verifier
 
 
 
@@ -128,5 +130,7 @@ def consume_oauth_state(
 
     db.commit()
 
-    return oauth_state.user_id
-
+    return (
+    oauth_state.user_id,
+    oauth_state.code_verifier,
+)

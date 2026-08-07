@@ -27,6 +27,8 @@ class ConfigurationError(RuntimeError):
 class GoogleOAuthConfig:
     """
     Configuration required for Google's OAuth authorization-code flow.
+
+    <client_id, client_secret, redirect_uri>
     """
 
     client_id: str

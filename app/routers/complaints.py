@@ -40,6 +40,21 @@ from app.services.email_sender import (
     ConsoleEmailSender,
     EmailSender,
 )
+from app.services.gmail_email_sender import (
+    GmailConnectionRequiredError,
+    GmailEmailSender,
+    get_gmail_email_sender_for_user,
+)
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -424,17 +439,28 @@ def approve_email_draft(
 
 
 
-def get_email_sender() -> EmailSender:
+def get_email_sender(
+        db: Session = Depends(get_db),
+        current_user : User = Depends(get_current_user),
+) -> EmailSender:
     """
-    Dependency function
-    Provides the email delivery implementation used by API
+   Provide the real Gmail sender for the authenticated user
 
-    Currently ConsoleEmailSender just prints the email in. terminal
-
-    Later we will replace it
+   The user's encrypted refresh token is loaded from the database,
+   then decrypted and used to create GmailEmailSender
     """
 
-    return ConsoleEmailSender()
+    try:
+        return get_gmail_email_sender_for_user(
+            db=db,
+            user_id=current_user.id,
+        )
+
+    except GmailConnectionRequiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
 
 @router.post(
     "/{complaint_id}/send",
@@ -478,3 +504,9 @@ def send_complaint_email(
             status_code=status.HTTP_409_CONFLICT,
             detail=error_message,
         ) from exc
+
+    except GmailEmailSender as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Gmail could not send the complaint email"
+        )

@@ -32,7 +32,7 @@ FIRST_ROAD_MESSAGE = (
 )
 
 ROAD_DETAILS_MESSAGE = (
-    "It is in Jabalpur, pincode 482002, "
+    "It is in Jabalpur, pincode 482005, "
     "and has been damaged for three months."
 )
 
@@ -181,7 +181,7 @@ def two_turn_complete_analysis(
         category=ComplaintCategory.ROAD,
         city="Jabalpur",
         area="Vijay Nagar",
-        pincode="482002",
+        pincode="482005",
         missing_fields=[],
         next_question=None,
         is_complete=True,
@@ -277,7 +277,7 @@ def test_complete_complaint_route_flow(
             category=ComplaintCategory.ROAD,
             city=None,
             area="Vijay Nagar",
-            pincode="482002",
+            pincode="482005",
             missing_fields=["city"],
             next_question="Which city is Vijay Nagar located in?",
             is_complete=False,
@@ -328,7 +328,7 @@ def test_complete_complaint_route_flow(
             f"/complaints/{complaint_id}/messages",
             json={
                 "content": (
-                    "The location is Vijay Nagar, pincode 482002."
+                    "The location is Vijay Nagar, pincode 482005."
                 ),
             },
             headers=auth_headers,
@@ -343,7 +343,7 @@ def test_complete_complaint_route_flow(
         assert updated_complaint["category"] == "road"
         assert updated_complaint["city"] is None
         assert updated_complaint["area"] == "Vijay Nagar"
-        assert updated_complaint["pincode"] == "482002"
+        assert updated_complaint["pincode"] == "482005"
 
         # First user + first assistant + second user + second assistant.
         assert len(updated_complaint["messages"]) == 4
@@ -375,7 +375,7 @@ def test_complete_complaint_route_flow(
 
         assert listed_complaint["category"] == "road"
         assert listed_complaint["area"] == "Vijay Nagar"
-        assert listed_complaint["pincode"] == "482002"
+        assert listed_complaint["pincode"] == "482005"
 
         detail_response = client.get(
             f"/complaints/{complaint_id}",
@@ -477,7 +477,7 @@ def test_complaint_becomes_awaiting_approval_when_complete(
         assert complaint["category"] == "road"
         assert complaint["city"] == "Jabalpur"
         assert complaint["area"] == "Vijay Nagar"
-        assert complaint["pincode"] == "482002"
+        assert complaint["pincode"] == "482005"
         assert complaint["authority"] is not None
 
         with SessionLocal() as db:
@@ -569,7 +569,7 @@ def test_generate_complaint_email_draft(
         assert user.name
         assert complaint.city == "Jabalpur"
         assert complaint.area == "Vijay Nagar"
-        assert complaint.pincode == "482002"
+        assert complaint.pincode == "482005"
         assert complaint.authority is not None
 
         return ComplaintEmailDraft(
@@ -579,7 +579,7 @@ def test_generate_complaint_email_draft(
             body=(
                 "Dear Sir/Madam,\n\n"
                 f"I, {user.name}, wish to report that the main road "
-                "in Vijay Nagar, Jabalpur, pincode 482002, has been "
+                "in Vijay Nagar, Jabalpur, pincode 482005, has been "
                 "badly damaged for three months.\n\n"
                 "I request timely inspection and appropriate action.\n\n"
                 f"Sincerely,\n{user.name}"
@@ -643,7 +643,7 @@ def test_edit_and_approve_complaint_email_draft(
             body=(
                 "Dear Sir/Madam,\n\n"
                 f"I, {user.name}, wish to report a damaged road "
-                "in Vijay Nagar, Jabalpur, pincode 482002.\n\n"
+                "in Vijay Nagar, Jabalpur, pincode 482005.\n\n"
                 "Please inspect the location and take appropriate action.\n\n"
                 f"Sincerely,\n{user.name}"
             ),
@@ -683,7 +683,7 @@ def test_edit_and_approve_complaint_email_draft(
         edited_body = (
             "Dear Sir/Madam,\n\n"
             "I wish to report that the main road in Vijay Nagar, "
-            "Jabalpur, pincode 482002, has remained badly damaged "
+            "Jabalpur, pincode 482005, has remained badly damaged "
             "for the past three months. The damaged road is creating "
             "difficulty and safety risks for commuters.\n\n"
             "Please arrange an inspection and complete the necessary "
@@ -783,7 +783,7 @@ def test_send_approved_complaint_email_route(
             body=(
                 "Dear Sir/Madam,\n\n"
                 "The main road in Vijay Nagar, Jabalpur, "
-                "pincode 482002, has been badly damaged.\n\n"
+                "pincode 482005, has been badly damaged.\n\n"
                 "Please inspect the location and take appropriate "
                 "action.\n\n"
                 f"Sincerely,\n{user.name}"

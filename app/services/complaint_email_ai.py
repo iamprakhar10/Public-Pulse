@@ -191,10 +191,10 @@ def generate_complaint_email_draft(
 
 """complaint.summary = (
     "Road near the user's house in Vijay Nagar, Jabalpur, "
-    "pincode 482002 has been badly damaged for three months."
+    "pincode 482005 has been badly damaged for three months."
 )
 
 complaint.category = ComplaintCategory.ROAD
 complaint.city = "Jabalpur"
 complaint.area = "Vijay Nagar"
-complaint.pincode = "482002"""
+complaint.pincode = "482005"""

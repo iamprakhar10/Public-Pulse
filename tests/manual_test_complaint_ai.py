@@ -17,7 +17,7 @@ def main() -> None:
         "role": "user",
         "content": (
             "The main road near Vijay Nagar in Jabalpur, "
-            "pincode 482002, has been badly damaged for three months."
+            "pincode 482005, has been badly damaged for three months."
         ),
     }
 ]

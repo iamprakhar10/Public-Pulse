@@ -24,13 +24,13 @@ def main() -> None:
         user_id=1,
         summary=(
             "The main road near Vijay Nagar, Jabalpur, "
-            "pincode 482002 has been badly damaged for three months. "
+            "pincode 482005 has been badly damaged for three months. "
             "Large potholes are creating a safety risk for commuters."
         ),
         category=ComplaintCategory.ROAD,
         city="Jabalpur",
         area="Vijay Nagar",
-        pincode="482002",
+        pincode="482005",
     )
 
     draft = generate_complaint_email_draft(

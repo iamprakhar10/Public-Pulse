@@ -23,13 +23,13 @@ def test_get_authority_for_valid_complaint() -> None:
         authority = get_authority_for_complaint(
             db=db,
             city_id=city.id,
-            pincode="482002",
+            pincode="482005",
             category=ComplaintCategory.ROAD,
         )
 
         assert authority is not None
         assert authority.city_id == city.id
-        assert authority.pincode == "482002"
+        assert authority.pincode == "482005"
         assert authority.category == ComplaintCategory.ROAD
         assert authority.email == "road.jabalpur@example.com"
         assert authority.is_active is True
@@ -81,13 +81,13 @@ def test_get_authority_for_other_category() -> None:
         authority = get_authority_for_complaint(
             db=db,
             city_id=city.id,
-            pincode="482002",
+            pincode="482005",
             category=ComplaintCategory.OTHER,
         )
 
         assert authority is not None
         assert authority.city_id == city.id
-        assert authority.pincode == "482002"
+        assert authority.pincode == "482005"
         assert authority.category == ComplaintCategory.OTHER
         assert authority.email == "other.jabalpur@example.com"
 

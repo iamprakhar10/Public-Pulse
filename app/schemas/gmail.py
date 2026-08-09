@@ -14,3 +14,28 @@ class GmailConnectionResponse(BaseModel):
 
     message: str
     google_email: EmailStr
+
+
+
+class GmailStatusResponse(BaseModel):
+    """
+    Tells the frontend whether the current user has connectd
+    their gmail or not
+
+    connected -> bool
+    google_email -> EmailStr | None=None
+    """
+
+    connected : bool
+    google_email : EmailStr | None=None
+
+
+
+class GmailDisconnectResponse(BaseModel):
+    """
+    Response returned after Gmail has been disconnected
+    
+    message-> str
+    """
+
+    message: str

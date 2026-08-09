@@ -33,12 +33,16 @@ from app.services.gmail_oauth_state import (
     create_oauth_state,
     InvalidOAuthStateError,
 )
-from app.schemas.gmail import GmailConnectionResponse
 
+from app.database.gmail_credential_crud import (
+    delete_gmail_credential,
+    get_gmail_credential_by_user_id,
+)
 
-router = APIRouter(
-    prefix="/gmail",
-    tags=['Gmail'],
+from app.schemas.gmail import (
+    GmailConnectionResponse,
+    GmailDisconnectResponse,
+    GmailStatusResponse,
 )
 
 
@@ -47,6 +51,20 @@ router = APIRouter(
 
 
 
+
+
+
+
+
+
+
+
+
+
+router = APIRouter(
+    prefix="/gmail",
+    tags=['Gmail'],
+)
 
 
 
@@ -179,4 +197,117 @@ def gmail_callback(
     return GmailConnectionResponse(
         message="Gmail connected successfully.",
         google_email=connection.google_email,
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@router.get(
+    "/status",
+    response_model=GmailStatusResponse,
+)
+def get_gmail_connection_status(
+    db: Session = Depends(get_db),
+    current_user : User = Depends(get_current_user),
+) -> GmailStatusResponse:
+    """
+    Returns the gmail connection status of a authenticated 
+    public pulse user
+
+    This doesn't contact google
+
+    Just checks whether public pulse has a GmailCredential
+    row for this current user or not
+    """
+
+    gmail_credential = get_gmail_credential_by_user_id(
+        db=db,
+        user_id=current_user.id,
+    )
+
+    if gmail_credential is None:
+        return GmailStatusResponse(
+            connected=False,
+        )
+    
+    return GmailStatusResponse(
+        connected=True,
+        google_email=gmail_credential.google_email,
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@router.delete(
+    "/disconnect",
+    response_model=GmailDisconnectResponse,
+)
+def disconnect_gmail(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> GmailDisconnectResponse:
+    """
+    This disconnects the gmail of an authenticated public pulse
+    user
+
+    The stored GmailCredential will be deleted including 
+    the refresh token
+
+    If this succeeds, public pulse user won't be able to send 
+    gmail messages for this user unless they connect their
+    gmail again
+    """
+    gmail_credential = get_gmail_credential_by_user_id(
+        db=db,
+        user_id=current_user.id,
+    )
+
+    if gmail_credential is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Gmail is not connected.",
+        )
+
+    delete_gmail_credential(
+        db=db,
+        user_id=current_user.id,
+    )
+    return GmailDisconnectResponse(
+        message="Gmail disconnected successfully."
     )

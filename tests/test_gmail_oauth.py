@@ -13,6 +13,8 @@ import pytest
 from app.config import GoogleOAuthConfig
 from app.services.gmail_oauth import (
     build_google_authorization_url,
+    MissingRequiredGoogleScopeError,
+    validate_required_google_scopes,
 )
 
 
@@ -148,4 +150,35 @@ def test_build_google_authorization_url_requires_code_verifier(
             config=google_config,
             state="test-state",
             code_verifier="",
+        )
+
+
+def test_validate_required_google_scopes_accepts_gmail_send() -> None:
+    """
+    gmail.send should satisfy Public Pulse's required Gmail permission.
+    """
+
+    validate_required_google_scopes(
+        granted_scopes=[
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/gmail.send",
+        ],
+    )
+
+
+def test_validate_required_google_scopes_rejects_missing_gmail_send() -> None:
+    """
+    OAuth connection must fail when the user does not grant gmail.send.
+    """
+
+    with pytest.raises(
+        MissingRequiredGoogleScopeError,
+        match="sending permission",
+    ):
+        validate_required_google_scopes(
+            granted_scopes=[
+                "openid",
+                "https://www.googleapis.com/auth/userinfo.email",
+            ],
         )

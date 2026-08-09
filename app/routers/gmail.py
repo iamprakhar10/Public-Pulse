@@ -28,6 +28,7 @@ from app.services.gmail_oauth import (
     GmailOAuthError,
     GoogleAccountAlreadyConnectedError,
     complete_gmail_oauth_connection,
+    MissingRequiredGoogleScopeError
 )
 from app.services.gmail_oauth_state import (
     create_oauth_state,
@@ -192,6 +193,12 @@ def gmail_callback(
     except GoogleAccountAlreadyConnectedError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    except MissingRequiredGoogleScopeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
 

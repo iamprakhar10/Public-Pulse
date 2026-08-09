@@ -88,6 +88,12 @@ class GoogleAccountAlreadyConnectedError(GmailOAuthError):
     """
 
 
+class MissingRequiredGoogleScopeError(GmailOAuthError):
+    """
+    Raised when google doesn't grant a scope required by Publis
+    pulse user
+    """
+
 
 @dataclass(frozen=True)
 class GoogleAuthorizationResult:
@@ -439,3 +445,45 @@ def build_google_authorization_url(
         ) 
 
     return authorization_url
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def validate_required_google_scopes(
+        granted_scopes: list[str] | tuple[str, ...] | set[str],
+) -> None:
+    """
+    Ensuring Google granted every permission required by Public Pulse.
+
+    Public Pulse needs gmail.send because approved complaints are
+    sent through the user's Gmail account.
+    """
+
+    granted_scope_set = set(granted_scopes)
+
+    required_scopes = {
+        "https://www.googleapis.com/auth/gmail.send",
+    }
+
+    missing_scopes = (
+        required_scopes-granted_scope_set
+    )
+
+    if missing_scopes:
+        raise MissingRequiredGoogleScopeError(
+            "Gmail sending permission was not granted. "
+            "Please connect Gmail again and allow email sending."
+        )

@@ -44,7 +44,14 @@ from app.schemas.gmail import (
     GmailDisconnectResponse,
     GmailStatusResponse,
 )
-
+from app.services.google_token_revocation import (
+    GoogleTokenRevocationError,
+    revoke_google_token,
+)
+from app.utils.token_encryption import (
+    TokenEncryptionError,
+    decrypt_token
+)
 
 
 
@@ -286,8 +293,14 @@ def disconnect_gmail(
     This disconnects the gmail of an authenticated public pulse
     user
 
-    The stored GmailCredential will be deleted including 
-    the refresh token
+    The stored refresh token is:
+    -loaded from PostgreSQL
+    -Decrypted
+    -revoked wiht google
+    -deleted from public pul;se
+
+    local credentials will only be deleted if google can 
+    successfully revoke the token
 
     If this succeeds, public pulse user won't be able to send 
     gmail messages for this user unless they connect their
@@ -304,6 +317,31 @@ def disconnect_gmail(
             detail="Gmail is not connected.",
         )
 
+    try:
+        refresh_token = decrypt_token(
+            encrypted_token=gmail_credential.encrypted_refresh_token,
+            encryption_key=get_token_encryption_key(),
+        )
+
+        revoke_google_token(
+            token=refresh_token,
+        )
+
+    except TokenEncryptionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                "Stored gmail credential could not be read."
+            ),
+        ) from exc
+
+    except GoogleTokenRevocationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail= str(exc),
+        ) from exc
+
+
     delete_gmail_credential(
         db=db,
         user_id=current_user.id,
@@ -311,3 +349,14 @@ def disconnect_gmail(
     return GmailDisconnectResponse(
         message="Gmail disconnected successfully."
     )
+
+
+
+"""
+Google’s official revocation endpoint accepts either an access
+token or refresh token
+via POST https://oauth2.googleapis.com/revoke. 
+Since we persist the refresh token, that’s what we should 
+revoke. Google also recommends revoking tokens once they are
+no longer needed and deleting them from our system
+"""

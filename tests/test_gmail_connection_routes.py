@@ -1,8 +1,7 @@
 """
-Tests for Gmail status and disconnect endpoints.
+Tests for Gmail status and disconnect routes.
 
-These tests use the test database, so they do not affect the user's
-real Gmail connection stored in the development database.
+Tests use the separate test database and never contact real Google.
 """
 
 import pytest
@@ -33,7 +32,7 @@ TEST_PHONE = "9555555555"
 @pytest.fixture
 def db_session():
     """
-    Provide a clean database session for Gmail connection route tests.
+    Provide a clean database session for these tests.
     """
 
     db = SessionLocal()
@@ -71,7 +70,7 @@ def test_user(
         db_session,
 ) -> User:
     """
-    Create the authenticated Public Pulse test user.
+    Create a real Public Pulse user in the test database.
     """
 
     user = User(
@@ -94,7 +93,10 @@ def authorization_headers(
         user: User,
 ) -> dict[str, str]:
     """
-    Create the Authorization header for a Public Pulse user.
+    Build the Public Pulse Authorization header.
+
+    Keep this call consistent with the create_access_token()
+    signature already used in your project.
     """
 
     token = create_access_token(
@@ -108,12 +110,45 @@ def authorization_headers(
     }
 
 
+def create_test_gmail_credential(
+        db_session,
+        test_user,
+        encryption_key: str,
+        *,
+        google_account_id: str,
+        google_email: str,
+) -> GmailCredential:
+    """
+    Create a fake Gmail credential in the test database.
+    """
+
+    credential = GmailCredential(
+        user_id=test_user.id,
+        google_account_id=google_account_id,
+        google_email=google_email,
+        encrypted_refresh_token=encrypt_token(
+            token="fake-refresh-token",
+            encryption_key=encryption_key,
+        ),
+        scopes=(
+            "openid "
+            "https://www.googleapis.com/auth/gmail.send"
+        ),
+    )
+
+    db_session.add(credential)
+    db_session.commit()
+    db_session.refresh(credential)
+
+    return credential
+
+
 def test_gmail_status_not_connected(
         db_session,
         test_user,
 ) -> None:
     """
-    A user without GmailCredential should be reported as disconnected.
+    A user without Gmail credentials should show disconnected.
     """
 
     response = client.get(
@@ -136,29 +171,20 @@ def test_gmail_status_connected(
         test_user,
 ) -> None:
     """
-    A user with GmailCredential should be reported as connected.
+    A user with Gmail credentials should show connected.
     """
 
     encryption_key = (
         Fernet.generate_key().decode("utf-8")
     )
 
-    credential = GmailCredential(
-        user_id=test_user.id,
-        google_account_id="google-account-status-test",
+    create_test_gmail_credential(
+        db_session=db_session,
+        test_user=test_user,
+        encryption_key=encryption_key,
+        google_account_id="google-status-test",
         google_email="connected@gmail.com",
-        encrypted_refresh_token=encrypt_token(
-            token="fake-refresh-token",
-            encryption_key=encryption_key,
-        ),
-        scopes=(
-            "openid "
-            "https://www.googleapis.com/auth/gmail.send"
-        ),
     )
-
-    db_session.add(credential)
-    db_session.commit()
 
     response = client.get(
         "/gmail/status",
@@ -178,31 +204,46 @@ def test_gmail_status_connected(
 def test_disconnect_gmail(
         db_session,
         test_user,
+        monkeypatch,
 ) -> None:
     """
-    Disconnect should delete the user's GmailCredential.
+    Disconnect should:
+
+    - decrypt the stored refresh token,
+    - revoke it with Google,
+    - delete the local Gmail credential.
     """
 
     encryption_key = (
         Fernet.generate_key().decode("utf-8")
     )
 
-    credential = GmailCredential(
-        user_id=test_user.id,
-        google_account_id="google-account-disconnect-test",
+    create_test_gmail_credential(
+        db_session=db_session,
+        test_user=test_user,
+        encryption_key=encryption_key,
+        google_account_id="google-disconnect-test",
         google_email="disconnect@gmail.com",
-        encrypted_refresh_token=encrypt_token(
-            token="fake-refresh-token",
-            encryption_key=encryption_key,
-        ),
-        scopes=(
-            "openid "
-            "https://www.googleapis.com/auth/gmail.send"
-        ),
     )
 
-    db_session.add(credential)
-    db_session.commit()
+    # The route must use the same key that encrypted our test token.
+    monkeypatch.setattr(
+        "app.routers.gmail.get_token_encryption_key",
+        lambda: encryption_key,
+    )
+
+    revoked_tokens: list[str] = []
+
+    def fake_revoke_google_token(
+            token: str,
+    ) -> None:
+        revoked_tokens.append(token)
+
+    # Never contact real Google from tests.
+    monkeypatch.setattr(
+        "app.routers.gmail.revoke_google_token",
+        fake_revoke_google_token,
+    )
 
     response = client.delete(
         "/gmail/disconnect",
@@ -217,7 +258,13 @@ def test_disconnect_gmail(
         "message": "Gmail disconnected successfully.",
     }
 
-    # Status should now report disconnected.
+    # Proves the decrypted plaintext refresh token was supplied
+    # to the revocation service.
+    assert revoked_tokens == [
+        "fake-refresh-token",
+    ]
+
+    # Gmail credential should now be gone.
     status_response = client.get(
         "/gmail/status",
         headers=authorization_headers(
@@ -238,7 +285,7 @@ def test_disconnect_requires_existing_connection(
         test_user,
 ) -> None:
     """
-    Disconnecting when Gmail is not connected should return 409.
+    Disconnecting an account that is not connected returns 409.
     """
 
     response = client.delete(
@@ -250,7 +297,75 @@ def test_disconnect_requires_existing_connection(
 
     assert response.status_code == 409
 
-    assert (
-        response.json()["detail"]
-        == "Gmail is not connected."
+    assert response.json() == {
+        "detail": "Gmail is not connected.",
+    }
+
+
+def test_disconnect_does_not_delete_credential_when_google_fails(
+        db_session,
+        test_user,
+        monkeypatch,
+) -> None:
+    """
+    If Google revocation fails, retain the local refresh token so
+    revocation can be retried later.
+    """
+
+    from app.services.google_token_revocation import (
+        GoogleTokenRevocationError,
     )
+
+    encryption_key = (
+        Fernet.generate_key().decode("utf-8")
+    )
+
+    create_test_gmail_credential(
+        db_session=db_session,
+        test_user=test_user,
+        encryption_key=encryption_key,
+        google_account_id="google-revocation-failure",
+        google_email="still-connected@gmail.com",
+    )
+
+    monkeypatch.setattr(
+        "app.routers.gmail.get_token_encryption_key",
+        lambda: encryption_key,
+    )
+
+    def fake_revoke_google_token(
+            token: str,
+    ) -> None:
+        raise GoogleTokenRevocationError(
+            "Google could not revoke Gmail access."
+        )
+
+    monkeypatch.setattr(
+        "app.routers.gmail.revoke_google_token",
+        fake_revoke_google_token,
+    )
+
+    response = client.delete(
+        "/gmail/disconnect",
+        headers=authorization_headers(
+            test_user,
+        ),
+    )
+
+    assert response.status_code == 502
+
+    # Since Google revocation failed, the local credential
+    # must still exist.
+    status_response = client.get(
+        "/gmail/status",
+        headers=authorization_headers(
+            test_user,
+        ),
+    )
+
+    assert status_response.status_code == 200
+
+    assert status_response.json() == {
+        "connected": True,
+        "google_email": "still-connected@gmail.com",
+    }

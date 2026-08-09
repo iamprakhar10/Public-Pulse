@@ -24,6 +24,7 @@ from app.database.gmail_credential_crud import (
 )
 from app.services.gmail_oauth_state import consume_oauth_state
 from app.utils.token_encryption import encrypt_token
+from oauthlib.oauth2 import OAuth2Error
 
 
 
@@ -150,11 +151,33 @@ def exchange_google_authorization_code(
 
     # Makes a backend->Google POST request to google's token
     # endpoint
-    flow.fetch_token(
-        code=authorization_code,
-    )
+    # flow.fetch_token(
+    #     code=authorization_code,
+    # )
+
+    try :
+        flow.fetch_token(
+            code=authorization_code,
+        )
+    except OAuth2Error as exc:
+        raise GmailOAuthError(
+            "Google authorization failed."
+        ) from exc
+    except Warning as exc:
+        if "Scope has changed" in str(exc):
+            raise MissingRequiredGoogleScopeError(
+                "Gmail sending permission was not granted. "
+                "Please connect Gmail again and allow email sending."
+            ) from exc
+
+        raise
 
     credentials = flow.credentials
+    granted_scopes = credentials.scopes or []
+
+    validate_required_google_scopes(
+        granted_scopes=granted_scopes,
+    )
 
     if not credentials.id_token:
         raise MissingGoogleIdentityError(

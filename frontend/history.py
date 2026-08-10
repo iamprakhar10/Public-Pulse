@@ -4,7 +4,7 @@ Complaint history UI for Public Pulse.
 This module allows the authenticated user to:
 
 - view previous complaints,
-- inspect their statuses,
+- open a previous complaint,
 - start a new complaint.
 """
 
@@ -12,15 +12,19 @@ import streamlit as st
 
 from frontend.api_client import (
     APIClientError,
+    get_complaint,
     get_my_complaints,
 )
 
 
 def start_new_complaint() -> None:
     """
-    Clear the complaint currently stored in Streamlit session state.
+    Clear the currently selected complaint.
 
-    The next rerun will show the fresh complaint input again.
+    This does not delete anything from PostgreSQL.
+
+    It only tells the frontend that no complaint is currently
+    selected, so the complaint chat can start fresh.
     """
 
     st.session_state.current_complaint = None
@@ -28,9 +32,39 @@ def start_new_complaint() -> None:
     st.rerun()
 
 
+def open_complaint(
+        *,
+        complaint_id: int,
+) -> None:
+    """
+    Load one complaint from FastAPI and make it the active complaint.
+
+    The individual complaint endpoint returns the full conversation,
+    unlike the complaint history list which is mainly for summaries.
+    """
+
+    try:
+        complaint = get_complaint(
+            access_token=(
+                st.session_state.access_token
+            ),
+            complaint_id=complaint_id,
+        )
+
+    except APIClientError as exc:
+        st.error(
+            str(exc),
+        )
+        return
+
+    st.session_state.current_complaint = complaint
+
+    st.rerun()
+
+
 def show_start_new_complaint_button() -> None:
     """
-    Display a button for beginning another complaint.
+    Display the button used to begin a fresh complaint.
     """
 
     if st.button(
@@ -42,7 +76,12 @@ def show_start_new_complaint_button() -> None:
 
 def show_complaint_history() -> None:
     """
-    Load and display all complaints belonging to the logged-in user.
+    Display all complaints belonging to the authenticated user.
+
+    Each complaint can be opened.
+
+    Opening it loads the complete complaint from the backend and
+    places it into st.session_state.current_complaint.
     """
 
     st.subheader(
@@ -81,10 +120,6 @@ def show_complaint_history() -> None:
             "summary"
         )
 
-        category = complaint.get(
-            "category"
-        )
-
         with st.expander(
             f"Complaint #{complaint_id} — {status}"
         ):
@@ -93,6 +128,10 @@ def show_complaint_history() -> None:
                 st.write(
                     f"**Summary:** {summary}"
                 )
+
+            category = complaint.get(
+                "category"
+            )
 
             if category:
                 st.write(
@@ -103,23 +142,23 @@ def show_complaint_history() -> None:
                 "city"
             )
 
-            area = complaint.get(
-                "area"
-            )
-
-            pincode = complaint.get(
-                "pincode"
-            )
-
             if city:
                 st.write(
                     f"**City:** {city}"
                 )
 
+            area = complaint.get(
+                "area"
+            )
+
             if area:
                 st.write(
                     f"**Area:** {area}"
                 )
+
+            pincode = complaint.get(
+                "pincode"
+            )
 
             if pincode:
                 st.write(
@@ -133,4 +172,14 @@ def show_complaint_history() -> None:
             if email_subject:
                 st.write(
                     f"**Email subject:** {email_subject}"
+                )
+
+            # Unique key is required because there is one Open
+            # button for every complaint.
+            if st.button(
+                "Open complaint",
+                key=f"open_complaint_{complaint_id}",
+            ):
+                open_complaint(
+                    complaint_id=complaint_id,
                 )

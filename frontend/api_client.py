@@ -591,3 +591,46 @@ def get_my_complaints(
         )
 
     return response.json()
+
+
+
+
+
+
+def get_complaint(
+        *,
+        access_token: str,
+        complaint_id: int,
+) -> dict:
+    """
+    Fetch one complaint together with its full conversation history.
+
+    GET /complaints/{complaint_id}
+    """
+
+    try:
+        response = requests.get(
+            (
+                f"{API_BASE_URL}/complaints/"
+                f"{complaint_id}"
+            ),
+            headers=_authorization_headers(
+                access_token,
+            ),
+            timeout=10,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not load the complaint."
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not load the complaint.",
+            )
+        )
+
+    return response.json()

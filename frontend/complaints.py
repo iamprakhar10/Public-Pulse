@@ -16,6 +16,10 @@ from frontend.api_client import (
     send_complaint_message,
     start_complaint,
 )
+from frontend.email_draft import (
+    show_email_draft_section,
+)
+
 
 
 def initialize_complaint_session() -> None:
@@ -173,14 +177,15 @@ def show_active_complaint(
     # Complaint is complete
     # -----------------------------------------------------
 
-    if complaint_status == "awaiting_approval":
-        st.success(
-            "The complaint details are complete."
-        )
+    if complaint_status in {
+        "awaiting_approval",
+        "approved",
+        "sent",
+    }:
+        st.divider()
 
-        st.write(
-            "Next we will generate and review the email draft "
-            "before sending anything."
+        show_email_draft_section(
+            complaint,
         )
 
         return

@@ -77,14 +77,15 @@ def test_gmail_callback_success(
             "code": "valid-code",
             "state": "valid-state",
         },
+        follow_redirects=False,
     )
 
-    assert response.status_code == 200
-
-    assert response.json() == {
-        "message": "Gmail connected successfully.",
-        "google_email": "connected@gmail.com",
-    }
+    assert response.status_code == 302
+    assert response.headers["location"] == "http://localhost:8501"
+    # assert response.json() == {
+    #     "message": "Gmail connected successfully.",
+    #     "google_email": "connected@gmail.com",
+    # }
 
 
 def test_gmail_callback_missing_code() -> None:

@@ -377,3 +377,174 @@ def send_complaint_message(
         )
 
     return response.json()
+
+
+
+def generate_email_draft(
+        *,
+        access_token: str,
+        complaint_id: int,
+) -> dict:
+    """
+    Generate and save email draft from completed complaint
+
+    POST /complaints/{complaint_id}/email-draft
+    """
+
+    try :
+        response = requests.post(
+            (
+                f"{API_BASE_URL}/complaints/"
+                f"{complaint_id}/email-draft"
+            ),
+            headers=_authorization_headers(
+                access_token,
+            ),
+            timeout=60,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not generate the email draft."
+        ) from exc
+
+    if response.status_code != 201:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not generate the email draft."
+            )
+        )
+
+    return response.json()
+
+
+
+
+
+def update_email_draft(
+        *,
+        access_token: str,
+        complaint_id: int,
+        subject: str,
+        body: str,
+) -> dict:
+    """
+    Save user edits to an existing complaint email draft.
+
+    PATCH /complaints/{complaint_id}/email-draft
+    """
+
+    try:
+        response = requests.patch(
+            (
+                f"{API_BASE_URL}/complaints/"
+                f"{complaint_id}/email-draft"
+            ),
+            headers=_authorization_headers(
+                access_token,
+            ),
+            json={
+                "subject": subject,
+                "body": body,
+            },
+            timeout=10,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not update the email draft."
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not update the email draft.",
+            )
+        )
+
+    return response.json()
+
+
+
+
+
+
+def approve_email_draft(
+        *,
+        access_token: str,
+        complaint_id: int,
+) -> dict:
+    """
+    Approve the current complaint email draft.
+
+    POST /complaints/{compleint_id}/approve
+    """
+
+    try:
+        response = requests.post(
+            (
+                f"{API_BASE_URL}/complaints/"
+                f"{complaint_id}/approve"
+            ),
+            headers=_authorization_headers(
+                access_token,
+            ),
+            timeout=10,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not approve the email."
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                'Could not approve the email.'
+            )
+        )
+
+    return response.json()
+
+
+
+def send_complaint_email(
+        *,
+        access_token: str,
+        complaint_id: int,
+) -> dict:
+    """
+    Send an approved complaint email through the user's gmail
+
+    POST /complaints/{complaint_id}/send
+    """
+
+    try:
+        response = requests.post(
+            (
+                f"{API_BASE_URL}/complaints/"
+                f"{complaint_id}/send"
+            ),
+            headers=_authorization_headers(
+                access_token,
+            ),
+            timeout=60,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not send the complaint email."
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not send the complaint email."
+            )
+        )
+
+    return response.json()

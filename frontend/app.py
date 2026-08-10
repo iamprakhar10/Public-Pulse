@@ -6,6 +6,7 @@ import streamlit as st
 
 from frontend.auth import show_auth_page
 from frontend.gmail import show_gmail_section
+from frontend.complaints import show_complaint_section, send_complaint_message
 
 
 def initialize_session_state() -> None:
@@ -27,29 +28,21 @@ def logout() -> None:
 
     st.session_state.access_token = None
     st.session_state.logged_in = False
+    st.session_state.current_complaint = None
 
     st.rerun()
 
 
 def show_authenticated_page() -> None:
     """
-    Show the current authenticated Public Pulse interface.
-
-    At this stage it contains:
-
-    - Gmail connection management
-    - logout
-
-    Complaint creation will be added next.
+    Show the authenticated Public Pulse interface.
     """
 
     st.title(
         "Public Pulse"
     )
 
-    st.success(
-        "You are logged in."
-    )
+    show_complaint_section()
 
     st.divider()
 
@@ -57,17 +50,10 @@ def show_authenticated_page() -> None:
 
     st.divider()
 
-    st.write(
-        "Complaint creation will be added next."
-    )
-
-    st.divider()
-
     if st.button(
         "Logout",
     ):
         logout()
-
 
 def main() -> None:
     """

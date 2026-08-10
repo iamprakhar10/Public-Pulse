@@ -283,3 +283,97 @@ def disconnect_gmail(
         )
 
     return response.json()
+
+
+
+
+
+def start_complaint(
+        *,
+        access_token: str,
+        message: str,
+) -> dict:
+    """
+    Start a new complaint conversation.
+
+    POST /complaints
+
+    The first user message is sent in the JSON body
+    """
+
+    try :
+        response = requests.post(
+            f"{API_BASE_URL}/complaints",
+            headers=_authorization_headers(
+                access_token,
+            ),
+            json={
+                'message': message,
+            },
+            timeout=60,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not start the complaint."
+        ) from exc
+
+    if response.status_code != 201:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not start the complaint.",
+            )
+        )
+
+    return response.json()
+
+
+
+
+
+
+def send_complaint_message(
+        *,
+        access_token: str,
+        complaint_id: int,
+        content: str,
+) -> dict:
+    """
+    Add another user message to an existing complaint
+
+    POST /complaints/{complaint_id}/messages
+
+    The backend runs the complaint workflow again and returns
+    the updated complaint conversation
+    """
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/complaints/"
+            f"{complaint_id}/messages",
+            headers=_authorization_headers(
+                access_token,
+            ),
+            json={
+                "content": content,
+            },
+# Here we set timeout=60 instead of 10 because these complaint messages can 
+# run our entire Langgraph/LLM workflow, so ti may take some more time
+# than simplae login request 
+            timeout=60
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not send the complaint message."
+        ) from exc
+
+    if response.status_code != 201:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not send the complaint message.",
+            )
+        )
+
+    return response.json()

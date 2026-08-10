@@ -138,14 +138,13 @@ def connect_gmail(
 
 @router.get(
     "/callback",
-    response_model=GmailConnectionResponse,
 )
 def gmail_callback(
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
     db: Session = Depends(get_db),
-) -> GmailConnectionResponse:
+) -> RedirectResponse:
     """
     Complete Google's OAuth callback
 
@@ -176,7 +175,7 @@ def gmail_callback(
         )
 
     try:
-        connection = complete_gmail_oauth_connection(
+        complete_gmail_oauth_connection(
             db=db,
             state=state,
             authorization_code=code,
@@ -208,11 +207,14 @@ def gmail_callback(
             detail=str(exc),
         ) from exc
 
-    return GmailConnectionResponse(
-        message="Gmail connected successfully.",
-        google_email=connection.google_email,
+    # return GmailConnectionResponse(
+    #     message="Gmail connected successfully.",
+    #     google_email=connection.google_email,
+    # )
+    return RedirectResponse(
+        url="http://localhost:8501",
+        status_code=status.HTTP_302_FOUND,
     )
-
 
 
 

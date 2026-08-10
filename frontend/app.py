@@ -1,28 +1,11 @@
 """
-Public pulse streamlit frontend
-
-Current frontend milestone:
-- Register a new user
-- Login
-- Store JWT access token in Streamlit session
-- Show authenticated page
-- Logout
-
-Later we will add
-- Gmail connect/disconnect
-- Complaint conversation
-- Email draft approval
-- Complaint sending
-- Dashboard
-"""
-
-"""
 Main Streamlit entrypoint for Public Pulse.
 """
 
 import streamlit as st
 
 from frontend.auth import show_auth_page
+from frontend.gmail import show_gmail_section
 
 
 def initialize_session_state() -> None:
@@ -50,29 +33,45 @@ def logout() -> None:
 
 def show_authenticated_page() -> None:
     """
-    Temporary page shown after login.
+    Show the current authenticated Public Pulse interface.
 
-    We will replace this with the real Public Pulse interface
-    in the next milestones.
+    At this stage it contains:
+
+    - Gmail connection management
+    - logout
+
+    Complaint creation will be added next.
     """
 
-    st.title("Public Pulse")
+    st.title(
+        "Public Pulse"
+    )
 
     st.success(
         "You are logged in."
     )
 
+    st.divider()
+
+    show_gmail_section()
+
+    st.divider()
+
     st.write(
         "Complaint creation will be added next."
     )
 
-    if st.button("Logout"):
+    st.divider()
+
+    if st.button(
+        "Logout",
+    ):
         logout()
 
 
 def main() -> None:
     """
-    Main frontend entrypoint.
+    Main Streamlit application entrypoint.
     """
 
     st.set_page_config(

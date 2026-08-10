@@ -548,3 +548,46 @@ def send_complaint_email(
         )
 
     return response.json()
+
+
+
+
+
+# ---------------------------------------------------------
+# Complaint history
+# ---------------------------------------------------------
+
+
+def get_my_complaints(
+        *,
+        access_token: str,
+) -> list[dict]:
+    """
+    Fetch all complaints belonging to the logged-in user.
+
+    GET /complaints
+    """
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/complaints",
+            headers=_authorization_headers(
+                access_token,
+            ),
+            timeout=10,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not load your complaints."
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not load your complaints.",
+            )
+        )
+
+    return response.json()

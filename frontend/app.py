@@ -7,6 +7,12 @@ import streamlit as st
 from frontend.auth import show_auth_page
 from frontend.gmail import show_gmail_section
 from frontend.complaints import show_complaint_section, send_complaint_message
+from frontend.history import (
+    show_complaint_history,
+    show_start_new_complaint_button,
+)
+
+
 
 
 def initialize_session_state() -> None:
@@ -42,9 +48,18 @@ def show_authenticated_page() -> None:
         "Public Pulse"
     )
 
+    show_start_new_complaint_button()
+
+    st.divider()
+
+    show_complaint_history()
+
+    st.divider()
+    
     show_complaint_section()
 
     st.divider()
+
 
     show_gmail_section()
 
@@ -54,6 +69,10 @@ def show_authenticated_page() -> None:
         "Logout",
     ):
         logout()
+
+
+
+
 
 def main() -> None:
     """

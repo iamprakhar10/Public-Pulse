@@ -4,6 +4,7 @@ from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router
 from app.routers.complaints import router as complaints_router
 from app.routers.gmail import router as gmail_router
+from app.routers.dashboard import router as dashboard_router
 
 app = FastAPI(
     title="Public Pulse API",
@@ -21,3 +22,4 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(complaints_router)
 app.include_router(gmail_router)
+app.include_router(dashboard_router)

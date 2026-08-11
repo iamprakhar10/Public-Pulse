@@ -634,3 +634,68 @@ def get_complaint(
         )
 
     return response.json()
+
+
+
+
+
+
+
+
+
+def get_dashboard_summary(
+        *,
+        days: int | None = None,
+) -> dict:
+    """
+    Fetching dashboard statistics
+    if days is None:
+    GET /dashboard/summary
+
+    otherwise
+    Get /dashboar/summary?days=N
+    """
+    params={}
+
+    if days is not None:
+        params['days'] = days
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/dashboard/summary",
+            params=params,
+            timeout=10,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not load dashboard data"
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not load dashboard data."
+            )
+        )
+
+    return response.json()
+
+
+# except requests.RequestException :
+#         raise APIClientError(
+#             "Could not load dashboard data"
+#         )
+# This code will replace the requests error with our own error
+# BUT
+# except requests.RequestException as exc:
+# This will store the original error in exc
+# then 
+# raise APIClientError(...) from exc
+# says this APIClientError happened because of original 
+# requests error  
+# requests.ConnectionError
+#         ↓ caused
+# APIClientError: Could not load dashboard data.
+# This makes debugging easier   

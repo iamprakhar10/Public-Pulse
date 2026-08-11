@@ -5,14 +5,13 @@ Main Streamlit entrypoint for Public Pulse.
 import streamlit as st
 
 from frontend.auth import show_auth_page
+from frontend.complaints import show_complaint_section
+from frontend.dashboard import show_dashboard
 from frontend.gmail import show_gmail_section
-from frontend.complaints import show_complaint_section, send_complaint_message
 from frontend.history import (
     show_complaint_history,
     show_start_new_complaint_button,
 )
-
-
 
 
 def initialize_session_state() -> None:
@@ -26,10 +25,13 @@ def initialize_session_state() -> None:
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
+    if "current_complaint" not in st.session_state:
+        st.session_state.current_complaint = None
+
 
 def logout() -> None:
     """
-    Remove authentication information from the Streamlit session.
+    Clear the authenticated frontend session.
     """
 
     st.session_state.access_token = None
@@ -39,39 +41,65 @@ def logout() -> None:
     st.rerun()
 
 
-def show_authenticated_page() -> None:
+def show_authenticated_app() -> None:
     """
-    Show the authenticated Public Pulse interface.
+    Show sidebar navigation for authenticated users.
     """
 
-    st.title(
+    st.sidebar.title(
         "Public Pulse"
     )
 
-    show_start_new_complaint_button()
+    page = st.sidebar.radio(
+        "Navigation",
+        [
+            "Complaint",
+            "My Complaints",
+            "Dashboard",
+            "Gmail",
+        ],
+    )
 
-    st.divider()
+    st.sidebar.divider()
 
-    show_complaint_history()
-
-    st.divider()
-    
-    show_complaint_section()
-
-    st.divider()
-
-
-    show_gmail_section()
-
-    st.divider()
-
-    if st.button(
+    if st.sidebar.button(
         "Logout",
     ):
         logout()
 
+    if page == "Complaint":
+        st.title(
+            "Report a Problem"
+        )
 
+        show_start_new_complaint_button()
 
+        st.divider()
+
+        show_complaint_section()
+
+    elif page == "My Complaints":
+        st.title(
+            "My Complaints"
+        )
+
+        show_complaint_history()
+
+        st.divider()
+
+        # Selected complaint appears underneath history.
+        if st.session_state.current_complaint is not None:
+            show_complaint_section()
+
+    elif page == "Dashboard":
+        show_dashboard()
+
+    elif page == "Gmail":
+        st.title(
+            "Gmail Connection"
+        )
+
+        show_gmail_section()
 
 
 def main() -> None:
@@ -82,13 +110,13 @@ def main() -> None:
     st.set_page_config(
         page_title="Public Pulse",
         page_icon="📢",
-        layout="centered",
+        layout="wide",
     )
 
     initialize_session_state()
 
     if st.session_state.logged_in:
-        show_authenticated_page()
+        show_authenticated_app()
 
     else:
         show_auth_page()

@@ -139,6 +139,7 @@ def show_dashboard() -> None:
             status_df,
             x="status",
             y="complaints",
+            sort="-complaints",
         )
 
     else:
@@ -163,12 +164,23 @@ def show_dashboard() -> None:
             category_data,
             label_column="category",
         )
+        category_df = category_df.sort_values(
+            by="complaints",
+            ascending=False,
+        )
 
         st.bar_chart(
             category_df,
             x="category",
             y="complaints",
+            sort="-complaints",
         )
+
+        # st.dataframe(
+        #     category_df,
+        #     use_container_width=True,
+        #     hide_index=True,
+        # )
 
     else:
         st.info(
@@ -192,11 +204,16 @@ def show_dashboard() -> None:
             pincode_data,
             label_column="pincode",
         )
+        pincode_df = pincode_df.sort_values(
+                by="complaints",
+                ascending=False,
+            )
 
         st.bar_chart(
             pincode_df,
             x="pincode",
             y="complaints",
+            sort="-complaints",
         )
 
     else:

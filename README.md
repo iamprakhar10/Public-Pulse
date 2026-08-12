@@ -1,214 +1,318 @@
 # Public Pulse
 
-Public Pulse is an **AI-powered civic assistance platform** that helps citizens report public issues to the relevant authorities and helps surface structured, location-based civic data that can be useful for journalists and public-interest reporting.
+Public Pulse is an AI-powered civic complaint platform that helps citizens turn an informal description of a public issue into a structured, reviewable complaint and send it to the relevant authority through their own Gmail account.
 
-The project combines **LLM workflows, FastAPI, PostgreSQL, LangGraph, authentication, Gmail OAuth, and analytics** to turn an unstructured complaint into a structured, reviewable, and actionable complaint workflow.
+The project combines a **FastAPI backend**, **PostgreSQL**, a **LangGraph complaint workflow**, **Groq-hosted LLM inference**, **Google OAuth 2.0 / Gmail API**, and a **Streamlit frontend**. It also includes a public civic dashboard for exploring complaint trends by status, category, pincode, and time period.
 
----
-
-## Why Public Pulse?
-
-Reporting a civic problem is often harder than it should be.
-
-A citizen may know that a road is damaged, water supply is irregular, or a public service is failing, but may not know:
-
-- what information is required,
-- which authority is responsible,
-- how to write a formal complaint,
-- where to send it,
-- or how similar complaints are distributed across an area.
-
-Public Pulse is being built to reduce that friction.
-
-The system guides the user through the complaint process, extracts structured information from natural-language conversation, prepares a complaint email, asks for human approval, and can send the approved complaint using the user's own Gmail account.
-
-At the same time, complaint data can be aggregated into dashboards so recurring local problems can be explored by location, category, status, and time period.
+> **Current status:** the complaint workflow, Gmail integration, complaint history, and dashboard are implemented. The `app/rag/` and `app/agents/` directories currently contain placeholders for future work; the Rights RAG knowledge layer is planned but not yet implemented.
 
 ---
 
-## Core Features
+## What Public Pulse Does
 
-### AI-guided complaint flow
+A user can:
 
-Users can describe a civic issue in natural language.
+1. Register and log in.
+2. Describe a civic problem in natural language.
+3. Continue a conversation while the AI asks for missing details.
+4. Have the complaint converted into structured fields.
+5. Resolve the city and match the complaint to an authority.
+6. Generate a formal complaint email.
+7. Review and edit the email.
+8. Explicitly approve it.
+9. Connect Gmail using OAuth 2.0.
+10. Send the approved complaint through the user's own Gmail account.
+11. Reopen previous complaints and view their conversation history.
+12. Explore aggregate complaint data in the civic dashboard.
 
-The system can:
+The supported complaint categories are:
 
-- ask for missing information,
-- extract structured complaint details,
-- identify location information,
-- classify the issue,
-- maintain complaint state,
-- and prepare the complaint for the next step.
-
-### LangGraph-based workflow
-
-The complaint pipeline uses **LangGraph** to coordinate the multi-step AI workflow.
-
-The graph is designed around stages such as:
-
-1. collecting user information,
-2. extracting complaint details,
-3. matching structured location/authority data,
-4. saving complaint state,
-5. generating an email draft,
-6. waiting for human approval.
-
-### Human-in-the-loop email approval
-
-AI-generated complaint emails are **not sent automatically**.
-
-Before sending, the user can:
-
-- review the subject,
-- review the email body,
-- edit the draft,
-- and explicitly approve it.
-
-### Gmail OAuth 2.0 integration
-
-Public Pulse supports connecting a user's Google account through **OAuth 2.0**.
-
-This allows approved complaint emails to be sent from the **user's own Gmail account**, rather than from a shared Public Pulse email address.
-
-OAuth state validation is used as part of the authorization flow.
-
-### Authentication
-
-The backend includes:
-
-- user registration,
-- password hashing,
-- login,
-- JWT access tokens,
-- protected endpoints,
-- and current-user authorization checks.
-
-### Complaint analytics dashboard
-
-The dashboard backend can aggregate civic complaints using filters such as:
-
-- time period,
-- category,
-- status,
-- pincode,
-- and location.
-
-This is intended to make recurring civic problems easier to identify and eventually support data-backed local reporting.
-
----
-
-## Tech Stack
-
-### Backend
-
-- Python
-- FastAPI
-- PostgreSQL
-- SQLAlchemy
-- Alembic
-- Pydantic
-
-### AI / LLM
-
-- LangGraph
-- LangChain
-- LLM structured outputs
-
-### Authentication & External APIs
-
-- JWT
-- OAuth 2.0
-- Gmail API
-
-### Frontend
-
-- Streamlit
-
-### Testing & Tooling
-
-- Pytest
-- Git / GitHub
-- uv
+- Road
+- Water
+- Electricity
+- Sanitation
+- Police
+- Government school
+- Women safety
+- Child labour
+- Overpricing
+- Other
 
 ---
 
 ## High-Level Architecture
 
 ```text
-                         ┌──────────────────┐
-                         │      User        │
-                         └────────┬─────────┘
-                                  │
-                                  ▼
-                         ┌──────────────────┐
-                         │   Streamlit UI   │
-                         └────────┬─────────┘
-                                  │ HTTP
-                                  ▼
-                     ┌────────────────────────┐
-                     │      FastAPI API       │
-                     └───────────┬────────────┘
-                                 │
-             ┌───────────────────┼───────────────────┐
-             │                   │                   │
-             ▼                   ▼                   ▼
-    ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
-    │ Authentication │  │ Complaint      │  │ Dashboard      │
-    │ JWT / OAuth    │  │ Services       │  │ Analytics      │
-    └────────────────┘  └───────┬────────┘  └────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │ LangGraph / LLM  │
-                       │ Workflow         │
-                       └────────┬─────────┘
-                                │
-              ┌─────────────────┼──────────────────┐
-              │                 │                  │
-              ▼                 ▼                  ▼
-      ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-      │ PostgreSQL   │  │ Authority /  │  │ Gmail API    │
-      │ Database     │  │ Location Data│  │ Email Send   │
-      └──────────────┘  └──────────────┘  └──────────────┘
+┌──────────────────────┐
+│       Browser        │
+└──────────┬───────────┘
+           │ HTTP
+           ▼
+┌──────────────────────┐
+│  Streamlit Frontend  │
+│      Port 8501       │
+└──────────┬───────────┘
+           │ HTTP / JWT
+           ▼
+┌──────────────────────┐
+│ Uvicorn + FastAPI    │
+│      Port 8000       │
+└──────────┬───────────┘
+           │
+     ┌─────┼───────────────────────────────┐
+     │     │                               │
+     ▼     ▼                               ▼
+ PostgreSQL  LangGraph / Groq          Google OAuth
+ Database     Complaint Workflow       + Gmail API
+```
+
+The Streamlit process serves the browser UI and acts as an HTTP client when calling the FastAPI API. Uvicorn hosts the FastAPI application as a separate process.
+
+---
+
+## Complaint AI Workflow
+
+The complaint workflow is implemented in `app/graphs/`.
+
+```text
+START
+  │
+  ▼
+load_conversation
+  │
+  ▼
+analyze_complaint
+  │
+  ▼
+resolve_city
+  │
+  ▼
+find_authority
+  │
+  ▼
+save_complaint
+  │
+  ├── complete ─────────────► END
+  │
+  └── incomplete
+          │
+          ▼
+   ask_clarification
+          │
+          ▼
+         END
+```
+
+`ComplaintGraphState` carries plain serializable state between nodes rather than SQLAlchemy sessions or ORM objects. This keeps the graph state suitable for future persistence/checkpointing.
+
+The LLM analysis service uses the Groq SDK with structured JSON-schema output and Pydantic validation. The current model used in the complaint analysis code is:
+
+```text
+openai/gpt-oss-20b
+```
+
+The AI extracts:
+
+- summary
+- category
+- city
+- area
+- pincode
+- missing fields
+- next clarification question
+- completion state
+
+The backend then resolves canonical location data and authority records rather than trusting the LLM to invent authority information.
+
+---
+
+## Complaint Lifecycle
+
+```text
+DRAFT
+  │
+  │ enough information collected
+  ▼
+AWAITING_APPROVAL
+  │
+  │ user approves email draft
+  ▼
+APPROVED
+  │
+  │ Gmail send succeeds
+  ▼
+SENT
+```
+
+The backend also supports:
+
+- `UNRESOLVED`
+- `PARTIALLY_RESOLVED`
+- `RESOLVED`
+
+Resolution analytics such as `resolved_at`, resolution time, and status history are planned for a later version.
+
+---
+
+## Human-in-the-Loop Email Flow
+
+Public Pulse does **not** automatically send an AI-generated complaint.
+
+```text
+Structured complaint
+        │
+        ▼
+AI email draft
+        │
+        ▼
+User reviews subject/body
+        │
+        ├── edit
+        │
+        ▼
+User explicitly approves
+        │
+        ▼
+APPROVED
+        │
+        ▼
+Send through connected Gmail
+        │
+        ▼
+SENT
+```
+
+This preserves user control before an external action is taken.
+
+---
+
+## Gmail OAuth 2.0 Flow
+
+Public Pulse lets users send complaints through their own Gmail account.
+
+Implemented Gmail features include:
+
+- Google OAuth 2.0 authorization
+- OAuth state validation
+- PKCE
+- Google identity verification
+- encrypted refresh-token storage
+- automatic access-token refresh
+- Gmail API sending
+- Gmail connection status
+- disconnect
+- Google token revocation
+- redirect back to Streamlit after a successful OAuth callback
+
+```text
+Authenticated Public Pulse user
+        │
+        ▼
+GET /gmail/connect
+        │
+        ├── OAuth state
+        └── PKCE code challenge
+        │
+        ▼
+Google consent screen
+        │
+        ▼
+GET /gmail/callback
+        │
+        ├── validate state
+        ├── recover PKCE verifier
+        ├── exchange authorization code
+        ├── verify Google identity
+        └── encrypt refresh token
+        │
+        ▼
+PostgreSQL
+```
+
+When an approved complaint is sent:
+
+```text
+Encrypted refresh token
+        │
+        ▼
+Decrypt token
+        │
+        ▼
+Refresh Google access token
+        │
+        ▼
+Gmail API
+        │
+        ▼
+Send complaint email
 ```
 
 ---
 
-## Complaint Workflow
+## Civic Dashboard
+
+The dashboard currently aggregates complaints by:
+
+- total complaint count
+- current status
+- category
+- pincode
+
+Time filtering is based on `Complaint.created_at`.
+
+Supported UI options include:
+
+- All time
+- Last 7 days
+- Last 30 days
+- Last 90 days
+- Custom number of days from 1 to 365
+
+Example:
 
 ```text
-User reports issue
-        ↓
-Complaint created
-        ↓
-AI asks clarifying questions if needed
-        ↓
-Structured information extracted
-        ↓
-Location / authority information matched
-        ↓
-Complaint data saved
-        ↓
-Email draft generated
-        ↓
-AWAITING_APPROVAL
-        ↓
-User reviews / edits draft
-        ↓
-User approves
-        ↓
-Email sent through connected Gmail account
+GET /dashboard/summary?days=30
 ```
 
-Complaint statuses used by the project include:
+means:
 
-- `DRAFT`
-- `AWAITING_APPROVAL`
-- `SENT`
-- `UNRESOLVED`
-- `PARTIALLY_RESOLVED`
-- `RESOLVED`
+> include complaints created within the last 30 days.
+
+A `resolved` count in that response means complaints **created during that period whose current status is resolved**. It does not mean complaints that became resolved during that period.
+
+Planned v2 analytics include:
+
+- `resolved_at`
+- resolution rate
+- average resolution time
+- status history
+- canonical area data
+- population data
+- per-capita area comparison
+
+---
+
+## Streamlit Frontend
+
+The frontend uses sidebar navigation with separate views for:
+
+- Complaint
+- My Complaints
+- Dashboard
+- Gmail
+
+The Streamlit layer is split into focused modules rather than one large file:
+
+- `app.py` — entrypoint and navigation
+- `auth.py` — login and registration UI
+- `api_client.py` — HTTP communication with FastAPI
+- `complaints.py` — complaint conversation UI
+- `email_draft.py` — draft review/edit/approve/send flow
+- `history.py` — complaint history and reopening
+- `dashboard.py` — analytics UI
+- `gmail.py` — Gmail connect/status/disconnect UI
+
+JWT access tokens are kept in Streamlit session state and attached to protected FastAPI requests as Bearer tokens.
 
 ---
 
@@ -218,31 +322,272 @@ Complaint statuses used by the project include:
 Public-Pulse/
 │
 ├── app/
+│   ├── agents/
+│   │   └── .gitkeep
+│   │
+│   ├── constants/
+│   │   └── complaint.py
+│   │
 │   ├── database/
+│   │   ├── authority_crud.py
+│   │   ├── base.py
+│   │   ├── complaint_crud.py
+│   │   ├── crud.py
+│   │   ├── db.py
+│   │   ├── dependencies.py
+│   │   ├── gmail_credential_crud.py
+│   │   ├── location_crud.py
+│   │   ├── models.py
+│   │   └── session.py
+│   │
+│   ├── graphs/
+│   │   ├── complaint_graph.py
+│   │   └── complaint_state.py
+│   │
+│   ├── rag/
+│   │   └── .gitkeep
+│   │
 │   ├── routers/
+│   │   ├── auth.py
+│   │   ├── complaints.py
+│   │   ├── dashboard.py
+│   │   ├── gmail.py
+│   │   ├── knowledge.py
+│   │   └── users.py
+│   │
 │   ├── schemas/
-│   ├── services/
+│   │   ├── auth.py
+│   │   ├── complaint.py
+│   │   ├── dashboard.py
+│   │   ├── gmail.py
+│   │   ├── location.py
+│   │   └── user.py
+│   │
 │   ├── scripts/
+│   │   ├── backfill_complaint_city_ids.py
+│   │   ├── seed_authorities.py
+│   │   └── seed_locations.py
+│   │
+│   ├── services/
+│   │   ├── complaint_ai.py
+│   │   ├── complaint_approval_workflow.py
+│   │   ├── complaint_email_ai.py
+│   │   ├── complaint_email_workflow.py
+│   │   ├── complaint_send_workflow.py
+│   │   ├── complaint_workflow.py
+│   │   ├── dashboard.py
+│   │   ├── email_sender.py
+│   │   ├── gmail_email_sender.py
+│   │   ├── gmail_oauth.py
+│   │   ├── gmail_oauth_state.py
+│   │   ├── google_token_revocation.py
+│   │   └── location_resolver.py
+│   │
 │   ├── utils/
+│   │   ├── security.py
+│   │   └── token_encryption.py
+│   │
 │   ├── config.py
 │   └── main.py
+│
+├── frontend/
+│   ├── __init__.py
+│   ├── api_client.py
+│   ├── app.py
+│   ├── auth.py
+│   ├── complaints.py
+│   ├── dashboard.py
+│   ├── email_draft.py
+│   ├── gmail.py
+│   └── history.py
 │
 ├── alembic/
 │   └── versions/
 │
-├── tests/
+├── data/
+│   └── .gitkeep
 │
+├── tests/
+│   ├── test_auth.py
+│   ├── test_authority_crud.py
+│   ├── test_complaint_crud.py
+│   ├── test_complaint_routes.py
+│   ├── test_complaint_send_workflow.py
+│   ├── test_config.py
+│   ├── test_connection.py
+│   ├── test_gmail_connection_routes.py
+│   ├── test_gmail_credential_crud.py
+│   ├── test_gmail_email_sender.py
+│   ├── test_gmail_oauth.py
+│   ├── test_gmail_oauth_callback.py
+│   ├── test_gmail_oauth_state.py
+│   ├── test_gmail_routes.py
+│   ├── test_google_token_revocation.py
+│   ├── test_location_resolver.py
+│   ├── test_token_encryption.py
+│   └── test_user_crud.py
+│
+├── .env.example
+├── .gitignore
+├── .python-version
 ├── alembic.ini
 ├── pyproject.toml
 ├── uv.lock
 └── README.md
 ```
 
+`app/agents/` and `app/rag/` are currently placeholders. `app/routers/knowledge.py` is also currently empty and is reserved for future knowledge/RAG functionality.
+
+---
+
+## Tech Stack
+
+### Backend
+
+- Python 3.14+
+- FastAPI
+- Uvicorn
+- SQLAlchemy 2.x
+- PostgreSQL
+- Alembic
+- Pydantic v2
+
+### AI
+
+- LangGraph
+- Groq Python SDK
+- structured JSON-schema LLM outputs
+- Pydantic validation
+
+### Authentication & Security
+
+- JWT (`python-jose`)
+- `pwdlib` password hashing
+- Google OAuth 2.0
+- PKCE
+- Fernet encryption for stored Google refresh tokens
+
+### Google Integration
+
+- `google-api-python-client`
+- `google-auth`
+- `google-auth-oauthlib`
+- Gmail API
+
+### Frontend
+
+- Streamlit
+- Requests
+- Pandas
+
+### Testing & Tooling
+
+- pytest
+- FastAPI TestClient / HTTPX
+- mocks and monkeypatching
+- uv
+- Ruff
+- Git / GitHub
+
+---
+
+## API Overview
+
+### Health
+
+```text
+GET /health
+```
+
+### Authentication
+
+```text
+POST /auth/register
+POST /auth/login
+POST /auth/token
+```
+
+`/auth/login` accepts the application's JSON login schema.
+
+`/auth/token` uses the OAuth2 password form format and supports the OAuth2/Swagger authentication flow.
+
+### Users
+
+```text
+GET /users/me
+```
+
+### Complaints
+
+```text
+POST  /complaints
+GET   /complaints
+GET   /complaints/{complaint_id}
+POST  /complaints/{complaint_id}/messages
+POST  /complaints/{complaint_id}/email-draft
+PATCH /complaints/{complaint_id}/email-draft
+POST  /complaints/{complaint_id}/approve
+POST  /complaints/{complaint_id}/send
+```
+
+### Gmail
+
+```text
+GET    /gmail/connect
+GET    /gmail/callback
+GET    /gmail/status
+DELETE /gmail/disconnect
+```
+
+### Dashboard
+
+```text
+GET /dashboard/summary
+GET /dashboard/summary?days=30
+```
+
+---
+
+## Database
+
+The backend uses PostgreSQL through SQLAlchemy.
+
+Important persisted entities include:
+
+- users
+- complaints
+- complaint messages
+- cities
+- city aliases
+- authorities
+- Gmail credentials
+- Gmail OAuth transaction state
+
+Alembic is used for database migrations.
+
+---
+
+## Authentication
+
+Users authenticate with email and password.
+
+Passwords are hashed using `pwdlib`'s recommended password hasher and never stored in plaintext.
+
+After login, Public Pulse creates a signed JWT containing the user ID in the `sub` claim.
+
+Protected requests use:
+
+```text
+Authorization: Bearer <JWT>
+```
+
+The backend derives the current user from the validated token rather than accepting a user ID from the client.
+
 ---
 
 ## Local Setup
 
-### 1. Clone the repository
+### 1. Clone
 
 ```bash
 git clone https://github.com/iamprakhar10/Public-Pulse.git
@@ -251,161 +596,300 @@ cd Public-Pulse
 
 ### 2. Install dependencies
 
+The project uses `uv`.
+
 ```bash
 uv sync
 ```
 
-### 3. Create a PostgreSQL database
+The project currently requires Python 3.14 or newer according to `pyproject.toml`.
+
+### 3. Create PostgreSQL databases
+
+Development database:
 
 ```bash
 createdb publicpulse
 ```
 
-### 4. Configure environment variables
+Separate test database:
 
-Create a `.env` file in the project root.
-
-Example structure:
-
-```env
-DATABASE_URL=postgresql://YOUR_USER:YOUR_PASSWORD@localhost:5432/publicpulse
-
-SECRET_KEY=your-secret-key
-ALGORITHM=HS256
-
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+```bash
+createdb publicpulse_test
 ```
 
-Add any other environment variables required by `app/config.py`.
+### 4. Configure environment variables
 
-Do **not** commit real secrets or your `.env` file to GitHub.
+Copy the example:
 
-### 5. Run database migrations
+```bash
+cp .env.example .env
+```
+
+The current `.env.example` defines:
+
+```env
+# PostgreSQL
+DATABASE_URL=
+TEST_DATABASE_URL=postgresql://username@localhost/publicpulse_test
+
+# Public Pulse authentication
+SECRET_KEY=
+
+# LLM provider
+GROQ_API_KEY=
+
+# Google OAuth
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/gmail/callback
+
+# Encryption for stored OAuth refresh tokens
+TOKEN_ENCRYPTION_KEY=
+```
+
+Fill these with your own local values.
+
+Never commit `.env`.
+
+### 5. Apply migrations
 
 ```bash
 uv run alembic upgrade head
 ```
 
-### 6. Seed local data
+### 6. Seed reference data
+
+Seed locations first:
 
 ```bash
-uv run python -m app.scripts.seed_authorities
 uv run python -m app.scripts.seed_locations
 ```
 
-### 7. Start the API
+Then authorities:
+
+```bash
+uv run python -m app.scripts.seed_authorities
+```
+
+If existing complaints need canonical city IDs backfilled:
+
+```bash
+uv run python -m app.scripts.backfill_complaint_city_ids
+```
+
+---
+
+## Running the Application
+
+Run the backend and frontend in separate terminals from the repository root.
+
+### Terminal 1 — FastAPI
 
 ```bash
 uv run uvicorn app.main:app --reload
+```
+
+API:
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### Terminal 2 — Streamlit
+
+```bash
+PYTHONPATH=. uv run streamlit run frontend/app.py
+```
+
+Frontend:
+
+```text
+http://localhost:8501
 ```
 
 ---
 
 ## Running Tests
 
+The project uses a separate PostgreSQL test database to keep test cleanup isolated from development data.
+
+Run the complete suite with:
+
 ```bash
 uv run python -m pytest -v
 ```
 
-The test suite covers areas including:
+The test suite currently covers areas including:
 
-- authentication,
-- complaint CRUD,
-- complaint routes,
-- complaint workflows,
-- email-draft flow,
-- and OAuth state validation.
+- authentication
+- user CRUD
+- complaint CRUD
+- complaint routes
+- complaint sending workflow
+- authority lookup
+- location resolution
+- token encryption
+- Gmail credential CRUD
+- OAuth state / PKCE
+- Gmail OAuth callback flow
+- Gmail connection routes
+- Gmail sender
+- Google token revocation
+- configuration
+- database connectivity
+
+There are also manual AI/graph test scripts for selected LLM-dependent workflows.
 
 ---
 
 ## Current Status
 
-Implemented or substantially built:
+### Implemented
 
-- [x] User registration and login
+- [x] Registration and login
 - [x] JWT authentication
-- [x] Complaint creation and conversation storage
-- [x] Structured complaint analysis workflow
-- [x] LangGraph complaint workflow
-- [x] Complaint email generation
-- [x] Human review and email editing
-- [x] Complaint approval flow
-- [x] Google OAuth / Gmail connection flow
-- [x] Gmail-based complaint sending workflow
-- [x] Authority and location data support
-- [x] Dashboard analytics backend
+- [x] Protected user and complaint endpoints
+- [x] Complaint conversation persistence
+- [x] Fixed complaint categories and lifecycle statuses
+- [x] LangGraph complaint processing
+- [x] Structured LLM extraction
+- [x] Clarification-question loop
+- [x] Canonical city resolution
+- [x] Authority matching
+- [x] AI-generated complaint email
+- [x] Human review and editing
+- [x] Explicit approval
+- [x] Gmail OAuth 2.0
+- [x] PKCE
+- [x] Encrypted refresh-token storage
+- [x] Gmail send
+- [x] Gmail disconnect and token revocation
+- [x] Complaint history and reopening
+- [x] Streamlit frontend with sidebar navigation
+- [x] Time-filtered civic dashboard
+- [x] Separate test database
 - [x] Automated backend tests
-- [x] Streamlit-based UI work
 
-Still being developed / expanded:
+### Planned
 
-- [ ] Retrieval-Augmented Generation (RAG) for civic rights and public-information knowledge
-- [ ] Larger and more reliable civic knowledge base
-- [ ] Broader authority coverage
+- [ ] Rights RAG using official government/legal sources
+- [ ] Populate `app/rag/` knowledge pipeline
+- [ ] Knowledge API
+- [ ] Resolution timestamps and richer lifecycle analytics
+- [ ] Per-capita area comparison
+- [ ] Canonical area/population dataset
+- [ ] Broader authority/location coverage
 - [ ] Production deployment
-- [ ] More complete end-to-end UI polish
-- [ ] Resolution tracking and richer public analytics
+- [ ] CI/CD
+- [ ] Logging and monitoring
+- [ ] Additional frontend polish
 
 ---
 
-## Planned RAG Knowledge Layer
+## Planned Rights RAG
 
-A planned part of Public Pulse is a **RAG-based civic knowledge system**.
+The repository already reserves:
 
-The goal is to allow users to ask questions such as:
+```text
+app/rag/
+app/agents/
+app/routers/knowledge.py
+data/
+```
 
-- What are my rights in this situation?
-- Which authority is responsible?
-- What rules apply to this civic service?
-- Where can I escalate this complaint?
-- What official source supports this information?
+for future knowledge functionality, but the RAG system is **not implemented yet**.
 
-The RAG layer is intended to retrieve information from curated and trustworthy civic/government sources rather than rely only on the LLM's internal knowledge.
+The intended direction is an official-source civic rights assistant using curated material from government and legal sources.
+
+Example questions:
+
+- Can a shop charge above MRP?
+- What can I do if police refuse to record my complaint?
+- Where can I report child labour?
+- What grievance mechanism applies to an electricity problem?
+- What official source explains my options?
+
+The intended RAG flow is:
+
+```text
+Official documents
+      │
+      ▼
+Chunking
+      │
+      ▼
+Embeddings
+      │
+      ▼
+Vector store
+      │
+      ▼
+Relevant retrieved context
+      │
+      ▼
+Grounded LLM answer + sources
+```
+
+The complaint agent and the future rights RAG solve different problems:
+
+```text
+Rights RAG
+"What are my rights / options?"
+
+Complaint workflow
+"Help me structure and send the complaint."
+```
 
 ---
 
-## Example Use Case
+## V2 Ideas
 
-A user reports:
+The following features are intentionally deferred rather than approximated with unreliable data:
 
-> The road near my house has been badly damaged for three months.
+### Resolution analytics
 
-Public Pulse can ask for missing details such as city, area, pincode, and other relevant context.
+Add dedicated lifecycle timestamps such as:
 
-After collecting enough information, the system can structure the complaint, determine the next workflow step, generate an email draft, and present it to the user for approval.
+```text
+resolved_at
+sent_at
+```
 
-The complaint is only sent after explicit user confirmation.
+or a status-history table to support accurate questions such as:
+
+- resolved in the last 30 days
+- average resolution time
+- resolution rate
+
+### Per-capita comparison
+
+Raw complaint counts are not enough to compare areas fairly.
+
+A future version can introduce canonical area/population records and calculate metrics such as:
+
+```text
+complaints per 1,000 residents
+```
+
+This requires trustworthy population data matched to the same geographic unit used for complaint aggregation.
 
 ---
 
-## Roadmap
+## Repository
 
-Future work includes:
-
-- completing the RAG knowledge pipeline,
-- collecting reliable government and civic documents,
-- improving authority matching,
-- expanding beyond the initial city dataset,
-- improving dashboard visualizations,
-- tracking complaint resolution,
-- adding deployment infrastructure,
-- and improving the production UI.
-
----
-
-## Author
-
-**Prakhar Singh**
-
-GitHub: [iamprakhar10](https://github.com/iamprakhar10)
-
-Project Repository: [Public Pulse](https://github.com/iamprakhar10/Public-Pulse)
+**GitHub:** https://github.com/iamprakhar10/Public-Pulse
 
 ---
 
 ## Disclaimer
 
-Public Pulse is an independent project and is not affiliated with or endorsed by any government authority.
+Public Pulse is an independent portfolio/development project and is not affiliated with or endorsed by a government authority.
 
-The platform is intended to assist users in organizing and communicating civic complaints. AI-generated content should be reviewed by the user before it is submitted or sent.
+AI-generated complaint content should be reviewed by the user before sending. Future rights-information functionality should rely on curated official sources and should not be treated as a substitute for professional legal advice.

@@ -153,6 +153,35 @@ The backend also supports:
 Resolution analytics such as `resolved_at`, resolution time, and status history are planned for a later version.
 
 ---
+## Demo
+
+### Login page
+
+![Complaint chat](docs/screenshots/login.png)
+
+### Google OAuth 
+
+![Complaint chat](docs/screenshots/google_oauth.png)
+
+
+### Complaint Workflow
+
+![Complaint chat](docs/screenshots/complaint.png)
+
+### Email Review and Approval
+
+![Email draft](docs/screenshots/draft_mail.png)
+
+
+### Sent Email
+
+![Email draft](docs/screenshots/sent_mail.png)
+
+### Civic Dashboard
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+---
 
 ## Human-in-the-Loop Email Flow
 
@@ -313,35 +342,6 @@ The Streamlit layer is split into focused modules rather than one large file:
 - `gmail.py` — Gmail connect/status/disconnect UI
 
 JWT access tokens are kept in Streamlit session state and attached to protected FastAPI requests as Bearer tokens.
-
----
-## Demo
-
-### Login page
-
-![Complaint chat](docs/screenshots/login.png)
-
-### Google OAuth 
-
-![Complaint chat](docs/screenshots/google_oauth.png)
-
-
-### Complaint Workflow
-
-![Complaint chat](docs/screenshots/complaint.png)
-
-### Email Review and Approval
-
-![Email draft](docs/screenshots/draft_mail.png)
-
-
-### Sent Email
-
-![Email draft](docs/screenshots/sent_mail.png)
-
-### Civic Dashboard
-
-![Dashboard](docs/screenshots/dashboard.png)
 
 
 

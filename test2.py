@@ -21,3 +21,12 @@ fun('2s',2)
   "is_verified": false
 }
 """
+
+
+
+
+"""
+one gmail id will have one refresh toke, if another laptop get's 
+a refresh token from same id, the current on won't work to send
+email, and even to revoke the old refresh token.
+"""

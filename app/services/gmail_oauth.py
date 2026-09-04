@@ -161,7 +161,7 @@ def exchange_google_authorization_code(
         )
     except OAuth2Error as exc:
         raise GmailOAuthError(
-            "Google authorization failed."
+            f"Google authorization failed. {exc}"
         ) from exc
     except Warning as exc:
         if "Scope has changed" in str(exc):

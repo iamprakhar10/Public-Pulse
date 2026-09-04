@@ -115,7 +115,7 @@ def consume_oauth_state(
 
     if oauth_state.used_at is not None:
         raise InvalidOAuthStateError(
-            "OAuth state has already been used."
+            "OAuth state has already been used-."
         )
 
     current_time = datetime.now(timezone.utc)

@@ -125,7 +125,7 @@ Send through connected Gmail
 SENT
 ```
 
-This preserves user control before an external action is taken.
+This preserves user control before sending a "bad" email.
 
 ---
 

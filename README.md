@@ -39,31 +39,6 @@ The supported complaint categories are:
 
 ---
 
-## High-Level Architecture
-
-```text
-┌──────────────────────┐
-│       Browser        │
-└──────────┬───────────┘
-           │ HTTP
-           ▼
-┌──────────────────────┐
-│  Streamlit Frontend  │
-│      Port 8501       │
-└──────────┬───────────┘
-           │ HTTP / JWT
-           ▼
-┌──────────────────────┐
-│ Uvicorn + FastAPI    │
-│      Port 8000       │
-└──────────┬───────────┘
-           │
-     ┌─────┼───────────────────────────────┐
-     │     │                               │
-     ▼     ▼                               ▼
- PostgreSQL  LangGraph / Groq          Google OAuth
- Database     Complaint Workflow       + Gmail API
-```
 
 ---
 

@@ -1,29 +1,27 @@
 # Public Pulse
+Public pulse is an application which uses AI to solve a bunch of our problems
+related to social issues, government administration etc.
 
-Public Pulse is an AI-powered civic complaint platform that helps citizens turn an informal description of a public issue into a structured, reviewable complaint and send it to the relevant authority through their own Gmail account.
+It also helps the ground reporters(journalists) to report the shortcoming of government with public backed data
 
-The project combines a **FastAPI backend**, **PostgreSQL**, a **LangGraph complaint workflow**, **Groq-hosted LLM inference**, **Google OAuth 2.0 / Gmail API**, and a **Streamlit frontend**. It also includes a public civic dashboard for exploring complaint trends by status, category, pincode, and time period.
-
-> **Current status:** the complaint workflow, Gmail integration, complaint history, and dashboard are implemented. The `app/rag/` and `app/agents/` directories currently contain placeholders for future work; the Rights RAG knowledge layer is planned but not yet implemented.
 
 ---
 
 ## What Public Pulse Does
 
-A user can:
+A user can
 
-1. Register and log in.
-2. Describe a civic problem in natural language.
-3. Continue a conversation while the AI asks for missing details.
-4. Have the complaint converted into structured fields.
-5. Resolve the city and match the complaint to an authority.
-6. Generate a formal complaint email.
-7. Review and edit the email.
-8. Explicitly approve it.
-9. Connect Gmail using OAuth 2.0.
-10. Send the approved complaint through the user's own Gmail account.
-11. Reopen previous complaints and view their conversation history.
-12. Explore aggregate complaint data in the civic dashboard.
+1. Describe a civic problem in natural language.
+2. Continue a conversation while the AI asks for missing details.
+3. Resolve the city and match the complaint to an authority.
+4. Generate a formal complaint email.
+5. Review and edit the email.
+6. Explicitly approve it.
+7. Connect Gmail using OAuth 2.0.
+8. Send the approved complaint through the user's own Gmail account.
+9. Reopen previous complaints and view their conversation history.
+10. Explore aggregate complaint data in the civic dashboard.
+
 
 The supported complaint categories are:
 
@@ -126,31 +124,6 @@ The backend then resolves canonical location data and authority records rather t
 
 ---
 
-## Complaint Lifecycle
-
-```text
-DRAFT
-  │
-  │ enough information collected
-  ▼
-AWAITING_APPROVAL
-  │
-  │ user approves email draft
-  ▼
-APPROVED
-  │
-  │ Gmail send succeeds
-  ▼
-SENT
-```
-
-The backend also supports:
-
-- `UNRESOLVED`
-- `PARTIALLY_RESOLVED`
-- `RESOLVED`
-
-Resolution analytics such as `resolved_at`, resolution time, and status history are planned for a later version.
 
 ---
 ## Demo
@@ -233,53 +206,14 @@ Implemented Gmail features include:
 - Google token revocation
 - redirect back to Streamlit after a successful OAuth callback
 
-```text
-Authenticated Public Pulse user
-        │
-        ▼
-GET /gmail/connect
-        │
-        ├── OAuth state
-        └── PKCE code challenge
-        │
-        ▼
-Google consent screen
-        │
-        ▼
-GET /gmail/callback
-        │
-        ├── validate state
-        ├── recover PKCE verifier
-        ├── exchange authorization code
-        ├── verify Google identity
-        └── encrypt refresh token
-        │
-        ▼
-PostgreSQL
-```
 
-When an approved complaint is sent:
 
-```text
-Encrypted refresh token
-        │
-        ▼
-Decrypt token
-        │
-        ▼
-Refresh Google access token
-        │
-        ▼
-Gmail API
-        │
-        ▼
-Send complaint email
-```
 
 ---
 
 ## Civic Dashboard
 
+Journalists can see the dashboard and report accordingly about an area or particular issue
 The dashboard currently aggregates complaints by:
 
 - total complaint count
@@ -297,15 +231,7 @@ Supported UI options include:
 - Last 90 days
 - Custom number of days from 1 to 365
 
-Example:
-
-```text
-GET /dashboard/summary?days=30
-```
-
-means:
-
-> include complaints created within the last 30 days.
+.
 
 A `resolved` count in that response means complaints **created during that period whose current status is resolved**. It does not mean complaints that became resolved during that period.
 
@@ -388,92 +314,10 @@ JWT access tokens are kept in Streamlit session state and attached to protected 
 - Requests
 - Pandas
 
-### Testing & Tooling
-
-- pytest
-- FastAPI TestClient / HTTPX
-- mocks and monkeypatching
-- uv
-- Ruff
-- Git / GitHub
 
 ---
 
-## API Overview
 
-### Health
-
-```text
-GET /health
-```
-
-### Authentication
-
-```text
-POST /auth/register
-POST /auth/login
-POST /auth/token
-```
-
-`/auth/login` accepts the application's JSON login schema.
-
-`/auth/token` uses the OAuth2 password form format and supports the OAuth2/Swagger authentication flow.
-
-### Users
-
-```text
-GET /users/me
-```
-
-### Complaints
-
-```text
-POST  /complaints
-GET   /complaints
-GET   /complaints/{complaint_id}
-POST  /complaints/{complaint_id}/messages
-POST  /complaints/{complaint_id}/email-draft
-PATCH /complaints/{complaint_id}/email-draft
-POST  /complaints/{complaint_id}/approve
-POST  /complaints/{complaint_id}/send
-```
-
-### Gmail
-
-```text
-GET    /gmail/connect
-GET    /gmail/callback
-GET    /gmail/status
-DELETE /gmail/disconnect
-```
-
-### Dashboard
-
-```text
-GET /dashboard/summary
-GET /dashboard/summary?days=30
-```
-
----
-
-## Database
-
-The backend uses PostgreSQL through SQLAlchemy.
-
-Important persisted entities include:
-
-- users
-- complaints
-- complaint messages
-- cities
-- city aliases
-- authorities
-- Gmail credentials
-- Gmail OAuth transaction state
-
-Alembic is used for database migrations.
-
----
 
 ## Authentication
 
@@ -494,6 +338,8 @@ The backend derives the current user from the validated token rather than accept
 ---
 
 ## Local Setup
+
+The 
 
 ### 1. Clone
 
@@ -657,138 +503,8 @@ There are also manual AI/graph test scripts for selected LLM-dependent workflows
 
 ---
 
-## Current Status
 
-### Implemented
 
-- [x] Registration and login
-- [x] JWT authentication
-- [x] Protected user and complaint endpoints
-- [x] Complaint conversation persistence
-- [x] Fixed complaint categories and lifecycle statuses
-- [x] LangGraph complaint processing
-- [x] Structured LLM extraction
-- [x] Clarification-question loop
-- [x] Canonical city resolution
-- [x] Authority matching
-- [x] AI-generated complaint email
-- [x] Human review and editing
-- [x] Explicit approval
-- [x] Gmail OAuth 2.0
-- [x] PKCE
-- [x] Encrypted refresh-token storage
-- [x] Gmail send
-- [x] Gmail disconnect and token revocation
-- [x] Complaint history and reopening
-- [x] Streamlit frontend with sidebar navigation
-- [x] Time-filtered civic dashboard
-- [x] Separate test database
-- [x] Automated backend tests
-
-### Planned
-
-- [ ] Rights RAG using official government/legal sources
-- [ ] Populate `app/rag/` knowledge pipeline
-- [ ] Knowledge API
-- [ ] Resolution timestamps and richer lifecycle analytics
-- [ ] Per-capita area comparison
-- [ ] Canonical area/population dataset
-- [ ] Broader authority/location coverage
-- [ ] Production deployment
-- [ ] CI/CD
-- [ ] Logging and monitoring
-- [ ] Additional frontend polish
-
----
-
-## Planned Rights RAG
-
-The repository already reserves:
-
-```text
-app/rag/
-app/agents/
-app/routers/knowledge.py
-data/
-```
-
-for future knowledge functionality, but the RAG system is **not implemented yet**.
-
-The intended direction is an official-source civic rights assistant using curated material from government and legal sources.
-
-Example questions:
-
-- Can a shop charge above MRP?
-- What can I do if police refuse to record my complaint?
-- Where can I report child labour?
-- What grievance mechanism applies to an electricity problem?
-- What official source explains my options?
-
-The intended RAG flow is:
-
-```text
-Official documents
-      │
-      ▼
-Chunking
-      │
-      ▼
-Embeddings
-      │
-      ▼
-Vector store
-      │
-      ▼
-Relevant retrieved context
-      │
-      ▼
-Grounded LLM answer + sources
-```
-
-The complaint agent and the future rights RAG solve different problems:
-
-```text
-Rights RAG
-"What are my rights / options?"
-
-Complaint workflow
-"Help me structure and send the complaint."
-```
-
----
-
-## V2 Ideas
-
-The following features are intentionally deferred rather than approximated with unreliable data:
-
-### Resolution analytics
-
-Add dedicated lifecycle timestamps such as:
-
-```text
-resolved_at
-sent_at
-```
-
-or a status-history table to support accurate questions such as:
-
-- resolved in the last 30 days
-- average resolution time
-- resolution rate
-
-### Per-capita comparison
-
-Raw complaint counts are not enough to compare areas fairly.
-
-A future version can introduce canonical area/population records and calculate metrics such as:
-
-```text
-complaints per 1,000 residents
-```
-
-This requires trustworthy population data matched to the same geographic unit used for complaint aggregation.
-
----
 
 ## Repository
 
@@ -796,8 +512,4 @@ This requires trustworthy population data matched to the same geographic unit us
 
 ---
 
-## Disclaimer
 
-Public Pulse is an independent portfolio/development project and is not affiliated with or endorsed by a government authority.
-
-AI-generated complaint content should be reviewed by the user before sending. Future rights-information functionality should rely on curated official sources and should not be treated as a substitute for professional legal advice.

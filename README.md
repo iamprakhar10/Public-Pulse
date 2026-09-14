@@ -67,42 +67,9 @@ The supported complaint categories are:
 
 ---
 
-## Complaint AI Workflow
+## How LLM helps us
 
-The complaint workflow is implemented in `app/graphs/`.
-
-```text
-START
-  │
-  ▼
-load_conversation
-  │
-  ▼
-analyze_complaint
-  │
-  ▼
-resolve_city
-  │
-  ▼
-find_authority
-  │
-  ▼
-save_complaint
-  │
-  ├── complete ─────────────► END
-  │
-  └── incomplete
-          │
-          ▼
-   ask_clarification
-          │
-          ▼
-         END
-```
-
-`ComplaintGraphState` carries plain serializable state between nodes rather than SQLAlchemy sessions or ORM objects. This keeps the graph state suitable for future persistence/checkpointing.
-
-The LLM analysis service uses the Groq SDK with structured JSON-schema output and Pydantic validation. The current model used in the complaint analysis code is:
+The LLM analysis service uses the Groq SDK with structured JSON-schema output and Pydantic validation. The current model used is:
 
 ```text
 openai/gpt-oss-20b

@@ -2,8 +2,9 @@
 Public pulse is an application which uses AI to solve a bunch of our problems
 related to social issues, government administration etc.
 
-It also helps the ground reporters(journalists) to report the shortcoming of government with public backed data
+It also helps the ground reporters(journalists) to report the shortcoming of government with authentic public backed data(every user sends email/complaint through their own Gmail account)
 
+Currently in this project, it supports 5 cities across 3 states. So a user can complaint for these areas only
 
 ---
 
@@ -63,8 +64,6 @@ The supported complaint categories are:
  PostgreSQL  LangGraph / Groq          Google OAuth
  Database     Complaint Workflow       + Gmail API
 ```
-
-The Streamlit process serves the browser UI and acts as an HTTP client when calling the FastAPI API. Uvicorn hosts the FastAPI application as a separate process.
 
 ---
 
@@ -190,7 +189,7 @@ This preserves user control before an external action is taken.
 
 ## Gmail OAuth 2.0 Flow
 
-Public Pulse lets users send complaints through their own Gmail account.
+The good part is that Public Pulse lets users send complaints through their own Gmail account.
 
 Implemented Gmail features include:
 
@@ -256,16 +255,6 @@ The frontend uses sidebar navigation with separate views for:
 - Dashboard
 - Gmail
 
-The Streamlit layer is split into focused modules rather than one large file:
-
-- `app.py` — entrypoint and navigation
-- `auth.py` — login and registration UI
-- `api_client.py` — HTTP communication with FastAPI
-- `complaints.py` — complaint conversation UI
-- `email_draft.py` — draft review/edit/approve/send flow
-- `history.py` — complaint history and reopening
-- `dashboard.py` — analytics UI
-- `gmail.py` — Gmail connect/status/disconnect UI
 
 JWT access tokens are kept in Streamlit session state and attached to protected FastAPI requests as Bearer tokens.
 
@@ -308,12 +297,6 @@ JWT access tokens are kept in Streamlit session state and attached to protected 
 - `google-auth-oauthlib`
 - Gmail API
 
-### Frontend
-
-- Streamlit
-- Requests
-- Pandas
-
 
 ---
 
@@ -323,9 +306,7 @@ JWT access tokens are kept in Streamlit session state and attached to protected 
 
 Users authenticate with email and password.
 
-Passwords are hashed using `pwdlib`'s recommended password hasher and never stored in plaintext.
-
-After login, Public Pulse creates a signed JWT containing the user ID in the `sub` claim.
+A signed JWT is then passed when want to use a protected endpoint
 
 Protected requests use:
 
@@ -339,7 +320,9 @@ The backend derives the current user from the validated token rather than accept
 
 ## Local Setup
 
-The 
+To run this project fully it is a little complicated, we are not just hitting an API request. We have to create a project in google cloud, get a client id+client secret, set the required permission(sending email). Sadly even after that since this project is currently in testing phase we can only allow 100 test users which we have to specify in google cloud. Then only we can send the email with those(100) accounts only.
+
+We have shown in demo images how the "working" application looks
 
 ### 1. Clone
 
@@ -403,8 +386,6 @@ TOKEN_ENCRYPTION_KEY=
 ```
 
 Fill these with your own local values.
-
-Never commit `.env`.
 
 ### 5. Apply migrations
 

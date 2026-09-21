@@ -1,0 +1,25 @@
+# Local environment containing installed Mac packages
+.venv/
+
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+
+# Git history and configuration
+.git/
+.gitignore
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# macOS-generated file
+.DS_Store
+
+# Editor settings
+.vscode/
+.idea/

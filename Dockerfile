@@ -2,7 +2,7 @@
 FROM python:3.14-slim
 
 # Make /app the working directory inside the image.
-WORKDIR /app
+WORKDIR /public-pulse
 
 # Install uv inside the image.
 RUN pip install --no-cache-dir uv

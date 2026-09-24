@@ -61,5 +61,36 @@ services:
       test-db:
         condition: service_healthy
 
+  frontend:
+    build: .
+
+    command:
+      [
+        "uv",
+        "run",
+        "--no-sync",
+        "python",
+        "-m",
+        "streamlit",
+        "run",
+        "frontend/app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501",
+      ]
+
+    env_file:
+      - .env
+
+    environment:
+      API_BASE_URL: http://api:8000
+
+    ports:
+      - "127.0.0.1:8501:8501"
+
+    depends_on:
+      api:
+        condition: service_started
+
+        
 volumes:
   postgres_data:

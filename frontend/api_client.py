@@ -6,10 +6,14 @@ the Streamlit frontend and the FastAPI backend.
 """
 
 import requests
+import os
 
-
-API_BASE_URL = "http://127.0.0.1:8000"
-
+API_BASE_URL = os.getenv(
+    "API_BASE_URL",
+    "http://127.0.0.1:8000",
+).rstrip("/")
+# Running on Mac    → http://127.0.0.1:8000
+# Running in Docker → value supplied by Compose: http://api:8000
 
 class APIClientError(RuntimeError):
     """

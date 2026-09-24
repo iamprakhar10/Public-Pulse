@@ -1,0 +1,84 @@
+name: Public Pulse CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Docker tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+
+    steps:
+      # Downloading the updated repository onto github's temporary runner
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      # Creating a test-only .env file required by compose.yaml
+      # These are fake CI values, not production secretse
+      - name: Create CI environment file
+        run: |
+          {
+            echo 'DATABASE_URL='
+            echo 'TEST_DATABASE_URL='
+            echo 'SECRET_KEY=ci-only-secret-key-not-for-production'
+            echo 'GROQ_API_KEY=ci-fake-groq-key'
+            echo 'GOOGLE_CLIENT_ID=ci-fake-google-client-id'
+            echo 'GOOGLE_CLIENT_SECRET=ci-fake-google-client-secret'
+            echo 'GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/gmail/callback'
+            echo 'TOKEN_ENCRYPTION_KEY=MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA='
+            echo 'DOCKER_POSTGRES_USER=publicpulse'
+            echo 'DOCKER_POSTGRES_PASSWORD=ci-postgres-password'
+            echo 'DOCKER_POSTGRES_DB=publicpulse'
+            echo 'DOCKER_TEST_POSTGRES_DB=publicpulse_test'
+          } > .env
+
+      # Validate compose.yaml before starting anything.
+      - name: Validate Docker Compose configuration
+        run: docker compose config --quiet
+
+      # Build the application image from the Dockerfile.
+      - name: Build API image
+        run: docker compose build api
+
+      # api depends on db and test-db, so Compose starts all three.
+      - name: Start API and databases
+        run: docker compose up -d api
+
+      # Create the schema in publicpulse_test.
+      - name: Migrate test database
+        run: |
+          docker compose exec -T api sh -c \
+            'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync alembic upgrade head'
+
+      # Seed in dependency order.
+      - name: Seed test locations
+        run: |
+          docker compose exec -T api sh -c \
+            'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync python -m app.scripts.seed_locations'
+
+      - name: Seed test authorities
+        run: |
+          docker compose exec -T api sh -c \
+            'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync python -m app.scripts.seed_authorities'
+
+      # Run tests inside the application container.
+      - name: Run test suite
+        run: |
+          docker compose exec -T api \
+            uv run --no-sync python -m pytest
+
+      # Print useful diagnostics if an earlier step fails.
+      - name: Show container logs after failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      # Always clean up, even when tests fail.
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v

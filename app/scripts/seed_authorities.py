@@ -44,12 +44,13 @@ def build_dummy_email(
 
     Example:
         roads.jabalpur@example.com
+    now changed to my gmail
     """
 
     city_slug = city_name.lower().replace(" ", "-")
     category_slug = category.value.replace("_", "-")
 
-    return f"{category_slug}.{city_slug}@example.com"
+    return f"prakhars156@gmail.com"
 
 
 def build_authority_name(

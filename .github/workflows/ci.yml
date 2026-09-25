@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   test:
@@ -66,6 +67,7 @@ jobs:
         run: |
           docker compose exec -T api sh -c \
             'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync python -m app.scripts.seed_authorities'
+      
       # Authenticate to GitHub Container Registry.
       # This runs only after successful tests on a push to main.
       - name: Log in to GitHub Container Registry
@@ -101,7 +103,7 @@ jobs:
 
           docker push \
             "ghcr.io/iamprakhar10/public-pulse:${GITHUB_SHA}"
-            
+
       # Run tests inside the application container.
       - name: Run test suite
         run: |

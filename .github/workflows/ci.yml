@@ -66,7 +66,42 @@ jobs:
         run: |
           docker compose exec -T api sh -c \
             'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync python -m app.scripts.seed_authorities'
+      # Authenticate to GitHub Container Registry.
+      # This runs only after successful tests on a push to main.
+      - name: Log in to GitHub Container Registry
+        if: >
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Tag the exact image that passed the tests, then publish it.
+      - name: Publish application image
+        if: >
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_ID="$(docker compose images -q api)"
+
+          docker tag \
+            "$IMAGE_ID" \
+            ghcr.io/iamprakhar10/public-pulse:latest
+
+          docker tag \
+            "$IMAGE_ID" \
+            "ghcr.io/iamprakhar10/public-pulse:${GITHUB_SHA}"
+
+          docker push \
+            ghcr.io/iamprakhar10/public-pulse:latest
+
+          docker push \
+            "ghcr.io/iamprakhar10/public-pulse:${GITHUB_SHA}"
+            
       # Run tests inside the application container.
       - name: Run test suite
         run: |

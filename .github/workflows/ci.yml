@@ -1,27 +1,49 @@
+# Human-readable workflow name shown in the GitHub Actions tab.
 name: Public Pulse CI
 
+# Run CI when code is pushed to main or when a pull request targets main.
 on:
   push:
-  pull_request:
+    branches:
+      - main
 
+  pull_request:
+    branches:
+      - main
+
+
+# Give the workflow only the permissions it needs.
 permissions:
+  # Required by actions/checkout to download the repository.
   contents: read
+
+  # Required to publish Docker images to GitHub Container Registry.
   packages: write
+
 
 jobs:
   test:
     name: Docker tests
+
+    # GitHub creates a temporary Ubuntu AMD64 machine for this job.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+
+    # Stop the job if it gets stuck for more than 45 minutes.
+    # The ARM64 build through QEMU can be slower than a normal build.
+    timeout-minutes: 45
 
 
     steps:
-      # Downloading the updated repository onto github's temporary runner
+      # Download the repository onto GitHub's temporary runner.
       - name: Check out repository
         uses: actions/checkout@v5
 
-      # Creating a test-only .env file required by compose.yaml
-      # These are fake CI values, not production secretse
+
+      # Create the .env file required by compose.yaml.
+      #
+      # These are fake CI-only values. They are sufficient because the test
+      # suite does not contact Groq or Google. Real production secrets must
+      # never be written directly into this workflow.
       - name: Create CI environment file
         run: |
           {
@@ -39,83 +61,138 @@ jobs:
             echo 'DOCKER_TEST_POSTGRES_DB=publicpulse_test'
           } > .env
 
-      # Validate compose.yaml before starting anything.
+
+      # Check compose.yaml for syntax and configuration errors before
+      # spending time building images or starting containers.
       - name: Validate Docker Compose configuration
         run: docker compose config --quiet
 
+
       # Build the application image from the Dockerfile.
+      #
+      # This first build creates the image that will actually be used by
+      # the API container during the test suite.
       - name: Build API image
         run: docker compose build api
 
-      # api depends on db and test-db, so Compose starts all three.
+
+      # Start the API container.
+      #
+      # Because api depends on db and test-db, Docker Compose also starts
+      # both PostgreSQL containers and waits for their health checks.
       - name: Start API and databases
         run: docker compose up -d api
 
-      # Create the schema in publicpulse_test.
+
+      # Apply all Alembic migrations to publicpulse_test.
+      #
+      # DATABASE_URL is temporarily replaced with TEST_DATABASE_URL so
+      # migrations cannot modify the normal development database.
       - name: Migrate test database
         run: |
           docker compose exec -T api sh -c \
             'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync alembic upgrade head'
 
-      # Seed in dependency order.
+
+      # Insert the location rows required by the tests.
       - name: Seed test locations
         run: |
           docker compose exec -T api sh -c \
             'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync python -m app.scripts.seed_locations'
 
+
+      # Insert the authority rows required by the tests.
+      # Locations must be seeded first because authorities reference them.
       - name: Seed test authorities
         run: |
           docker compose exec -T api sh -c \
             'DATABASE_URL="$TEST_DATABASE_URL" uv run --no-sync python -m app.scripts.seed_authorities'
-      
-      # Authenticate to GitHub Container Registry.
-      # This runs only after successful tests on a push to main.
-      - name: Log in to GitHub Container Registry
-        if: >
-          success() &&
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Tag the exact image that passed the tests, then publish it.
-      - name: Publish application image
-        if: >
-          success() &&
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main'
-        run: |
-          IMAGE_ID="$(docker compose images -q api)"
 
-          docker tag \
-            "$IMAGE_ID" \
-            ghcr.io/iamprakhar10/public-pulse:latest
-
-          docker tag \
-            "$IMAGE_ID" \
-            "ghcr.io/iamprakhar10/public-pulse:${GITHUB_SHA}"
-
-          docker push \
-            ghcr.io/iamprakhar10/public-pulse:latest
-
-          docker push \
-            "ghcr.io/iamprakhar10/public-pulse:${GITHUB_SHA}"
-
-      # Run tests inside the application container.
+      # Run the complete pytest suite inside the application container.
+      #
+      # If this command fails, GitHub skips all publishing steps below.
       - name: Run test suite
         run: |
           docker compose exec -T api \
             uv run --no-sync python -m pytest
 
-      # Print useful diagnostics if an earlier step fails.
+
+      # Authenticate the Docker client on the temporary GitHub runner
+      # with GitHub Container Registry.
+      #
+      # This runs only after successful tests on a direct push to main.
+      # It does not run for pull requests.
+      - name: Log in to GitHub Container Registry
+        if: >
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+
+      # Install CPU emulation support on the AMD64 GitHub runner.
+      #
+      # This allows Buildx to execute ARM64 build steps while creating
+      # the ARM64 variant of the image.
+      - name: Set up QEMU
+        if: >
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: docker/setup-qemu-action@v4
+
+
+      # Create a Buildx builder capable of producing multi-platform images.
+      - name: Set up Docker Buildx
+        if: >
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: docker/setup-buildx-action@v4
+
+
+      # Rebuild the application for AMD64 and ARM64, then publish both
+      # variants under one multi-platform image in GHCR.
+      #
+      # The "latest" tag provides a convenient current release.
+      # The commit-SHA tag provides an immutable, traceable release.
+      - name: Build and publish multi-platform image
+        if: >
+          success() &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+
+          tags: |
+            ghcr.io/iamprakhar10/public-pulse:latest
+            ghcr.io/iamprakhar10/public-pulse:${{ github.sha }}
+
+          # Reuse unchanged Docker layers in later workflow runs.
+          # This is especially helpful because dependency installation
+          # is the largest and slowest layer in this application image.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+
+      # Print container logs when any earlier step fails.
+      # These logs help diagnose API, PostgreSQL, migration, and test errors.
       - name: Show container logs after failure
         if: failure()
         run: docker compose logs --no-color
 
-      # Always clean up, even when tests fail.
+
+      # Stop containers and delete CI-only volumes, even if the job fails.
+      #
+      # This is safe because GitHub's runner and its test data are temporary.
       - name: Stop containers
         if: always()
         run: docker compose down -v

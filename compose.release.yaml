@@ -2,6 +2,7 @@ name: public-pulse-release
 
 services:
   db:
+    restart: unless-stopped
     image: postgres:17
 
     environment:
@@ -23,6 +24,7 @@ services:
       retries: 10
 
   api:
+    restart: unless-stopped
     image: ghcr.io/iamprakhar10/public-pulse:latest
 
     env_file:
@@ -39,6 +41,7 @@ services:
         condition: service_healthy
 
   frontend:
+    restart: unless-stopped
     image: ghcr.io/iamprakhar10/public-pulse:latest
 
     command:

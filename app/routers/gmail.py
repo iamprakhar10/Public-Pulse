@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.config import (
     get_google_oauth_config,
     get_token_encryption_key,
+    get_frontend_url,
 )
 from app.database.dependencies import (
     get_current_user,
@@ -212,7 +213,7 @@ def gmail_callback(
     #     google_email=connection.google_email,
     # )
     return RedirectResponse(
-        url="http://localhost:8501",
+        url=get_frontend_url(),
         status_code=status.HTTP_302_FOUND,
     )
 

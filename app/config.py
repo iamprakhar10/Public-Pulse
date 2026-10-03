@@ -88,3 +88,15 @@ def get_token_encryption_key() -> str:
         )
 
     return encryption_key
+
+
+
+
+
+
+def get_frontend_url() -> str:
+    """Return the frontend address used after Gmail authorization."""
+    return os.getenv(
+        "FRONTEND_URL",
+        "http://localhost:8501",
+    )

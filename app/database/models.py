@@ -566,6 +566,12 @@ class City(Base):
         ForeignKey('states.id'),
         nullable=False,
     )
+
+    population: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     # Lets us disable a city without deleting its records.
     is_supported: Mapped[bool] = mapped_column(
         Boolean,

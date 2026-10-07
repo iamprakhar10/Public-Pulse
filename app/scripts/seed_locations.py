@@ -34,6 +34,7 @@ CITIES = [
     {
         "name": "Jabalpur",
         "state_code": "MP",
+        "population": 1267564,
         "aliases": [
             "Jabalpur City",
             "Jubbulpore",
@@ -43,6 +44,7 @@ CITIES = [
     {
         "name": "Indore",
         "state_code": "MP",
+        "population": 1994397,
         "aliases": [
             "Indore City",
         ],
@@ -50,6 +52,7 @@ CITIES = [
     {
         "name": "Jaipur",
         "state_code": "RJ",
+        "population": 3046163,
         "aliases": [
             "Jaipur City",
         ],
@@ -57,6 +60,7 @@ CITIES = [
     {
         "name": "Kota",
         "state_code": "RJ",
+        "population": 1001694,
         "aliases": [
             "Kota City",
         ],
@@ -64,6 +68,7 @@ CITIES = [
     {
         "name": "Lucknow",
         "state_code": "UP",
+        "population": 2817105,
         "aliases": [
             "Lucknow City",
             "LKO",
@@ -107,6 +112,7 @@ def get_or_create_city(
         db:Session,
         name:str,
         state:State,
+        population: int | None,
 ) -> City:
     """
     Creatinging an city/ if already present returning the city
@@ -122,12 +128,14 @@ def get_or_create_city(
     city = db.scalar(statement)
 
     if city is not None:
+        city.population = population
         return city
 
     city = City(
         name=name.strip(),
         normalized_name=normalized_name,
         state_id=state.id,
+        population=population,
         is_supported=True,
     )
 
@@ -202,6 +210,7 @@ def seed_locations(
             db=db,
             name=city_data["name"],
             state=state,
+            population=city_data["population"],
         )
 
         for alias in city_data["aliases"]:

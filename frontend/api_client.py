@@ -687,6 +687,85 @@ def get_dashboard_summary(
     return response.json()
 
 
+def get_dashboard_cities() -> list[dict]:
+    """
+    Fetch supported cities available for dashboard comparison.
+
+    GET /dashboard/cities
+    """
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/dashboard/cities",
+            timeout=10,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not load dashboard cities."
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not load dashboard cities.",
+            )
+        )
+
+    return response.json()
+
+
+def get_city_comparison(
+        *,
+        city_ids: list[int],
+        days: int | None = None,
+) -> dict:
+    """
+    Fetch complaint rates per 10,000 people for two cities.
+
+    GET /dashboard/city-comparison?city_id=1&city_id=2
+    """
+
+    params: list[tuple[str, int]] = [
+        (
+            "city_id",
+            city_id,
+        )
+        for city_id in city_ids
+    ]
+
+    if days is not None:
+        params.append(
+            (
+                "days",
+                days,
+            )
+        )
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/dashboard/city-comparison",
+            params=params,
+            timeout=10,
+        )
+
+    except requests.RequestException as exc:
+        raise APIClientError(
+            "Could not load city comparison data."
+        ) from exc
+
+    if response.status_code != 200:
+        raise APIClientError(
+            _get_error_detail(
+                response,
+                "Could not load city comparison data.",
+            )
+        )
+
+    return response.json()
+
+
 # except requests.RequestException :
 #         raise APIClientError(
 #             "Could not load dashboard data"

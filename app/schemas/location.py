@@ -31,6 +31,7 @@ class CityResponse(BaseModel):
     name: str
     normalized_name: str
     state_id: int
+    population: int | None
     is_supported: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -47,4 +48,3 @@ class CityResolutionResponse(BaseModel):
     state_id: int
     state_name: str
     state_code: str
-

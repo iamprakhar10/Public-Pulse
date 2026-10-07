@@ -12,7 +12,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database.models import Complaint
+from app.constants.complaint import ComplaintCategory
+from app.database.models import City, Complaint
 
 
 def get_dashboard_cutoff(
@@ -207,4 +208,119 @@ def get_dashboard_summary(
             db,
             cutoff=cutoff,
         ),
+    }
+
+
+def get_city_category_complaint_rates(
+        db: Session,
+        *,
+        city_ids: list[int],
+        days: int | None,
+) -> dict:
+    """
+    Return category-level complaint rates per 10,000 people
+    for selected supported cities.
+    """
+
+    cutoff = get_dashboard_cutoff(days)
+
+    city_statement = (
+        select(
+            City.id,
+            City.name,
+            City.population,
+        )
+        .where(
+            City.id.in_(city_ids),
+            City.is_supported.is_(True),
+            City.population.is_not(None),
+            City.population > 0,
+        )
+        .order_by(
+            City.name.asc(),
+        )
+    )
+
+    city_rows = db.execute(
+        city_statement
+    ).all()
+
+    cities = [
+        {
+            "city_id": city_id,
+            "city_name": city_name,
+            "population": population,
+        }
+        for city_id, city_name, population in city_rows
+    ]
+
+    complaint_statement = (
+        select(
+            Complaint.city_id,
+            Complaint.category,
+            func.count(Complaint.id),
+        )
+        .where(
+            Complaint.city_id.in_(
+                [
+                    city["city_id"]
+                    for city in cities
+                ]
+            ),
+            Complaint.category.is_not(None),
+        )
+        .group_by(
+            Complaint.city_id,
+            Complaint.category,
+        )
+    )
+
+    if cutoff is not None:
+        complaint_statement = complaint_statement.where(
+            Complaint.created_at >= cutoff,
+        )
+
+    complaint_rows = db.execute(
+        complaint_statement,
+    ).all()
+
+    counts_by_city_and_category = {
+        (
+            city_id,
+            category.value,
+        ): complaint_count
+        for city_id, category, complaint_count in complaint_rows
+    }
+
+    category_rates = []
+
+    for city in cities:
+        for category in ComplaintCategory:
+            complaint_count = counts_by_city_and_category.get(
+                (
+                    city["city_id"],
+                    category.value,
+                ),
+                0,
+            )
+
+            category_rates.append(
+                {
+                    **city,
+                    "category": category.value,
+                    "complaint_count": complaint_count,
+                    "complaints_per_10000": round(
+                        (
+                            complaint_count
+                            / city["population"]
+                        )
+                        * 10000,
+                        2,
+                    ),
+                }
+            )
+
+    return {
+        "cities": cities,
+        "category_rates": category_rates,
     }

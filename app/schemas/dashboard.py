@@ -38,3 +38,45 @@ class DashboardSummaryResponse(BaseModel):
 #     "sent": 12
 #   }
 # }
+
+
+class CityComparisonCityResponse(BaseModel):
+    """
+    City metadata used by dashboard comparisons.
+    """
+
+    city_id: int
+
+    city_name: str
+
+    population: int
+
+
+class CityCategoryComplaintRateResponse(BaseModel):
+    """
+    Category-level complaint rate for one city.
+    """
+
+    city_id: int
+
+    city_name: str
+
+    population: int
+
+    category: str
+
+    complaint_count: int
+
+    complaints_per_10000: float
+
+
+class CityComplaintComparisonResponse(BaseModel):
+    """
+    Comparison of selected cities using complaints per 10,000 people.
+    """
+
+    period_days: int | None
+
+    cities: list[CityComparisonCityResponse]
+
+    category_rates: list[CityCategoryComplaintRateResponse]
